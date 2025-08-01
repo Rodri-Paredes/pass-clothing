@@ -11,7 +11,7 @@ import { CATEGORIES } from '../lib/constants';
 
 const ProductsPage: React.FC = () => {
   const { products, loadProducts, deleteProduct } = useProductStore();
-  const { activeBranch } = useAuthStore();
+  const { activeBranch, user } = useAuthStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [showProductForm, setShowProductForm] = useState(false);
@@ -52,13 +52,15 @@ const ProductsPage: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Productos</h1>
-        <Button
-          onClick={() => setShowProductForm(true)}
-          className="flex items-center space-x-2"
-        >
-          <Plus className="h-4 w-4" />
-          <span>Nuevo Producto</span>
-        </Button>
+        {user?.role === 'admin' && (
+          <Button
+            onClick={() => setShowProductForm(true)}
+            className="flex items-center space-x-2"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Nuevo Producto</span>
+          </Button>
+        )}
       </div>
 
       {/* Filters */}
@@ -119,20 +121,24 @@ const ProductsPage: React.FC = () => {
                     ${product.price.toFixed(2)}
                   </span>
                   <div className="flex space-x-2">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleEdit(product)}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="danger"
-                      onClick={() => handleDelete(product.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {user?.role === 'admin' && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleEdit(product)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          onClick={() => handleDelete(product.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -149,7 +155,7 @@ const ProductsPage: React.FC = () => {
               : 'Comienza agregando tu primer producto.'
             }
           </p>
-          {!searchTerm && !selectedCategory && (
+          {!searchTerm && !selectedCategory && user?.role === 'admin' && (
             <Button onClick={() => setShowProductForm(true)}>
               Agregar Producto
             </Button>
@@ -158,17 +164,19 @@ const ProductsPage: React.FC = () => {
       )}
 
       {/* Product Form Modal */}
-      <Modal
-        isOpen={showProductForm}
-        onClose={handleCloseForm}
-        title={editingProduct ? 'Editar Producto' : 'Nuevo Producto'}
-        size="lg"
-      >
-        <ProductForm
-          product={editingProduct}
+      {user?.role === 'admin' && (
+        <Modal
+          isOpen={showProductForm}
           onClose={handleCloseForm}
-        />
-      </Modal>
+          title={editingProduct ? 'Editar Producto' : 'Nuevo Producto'}
+          size="lg"
+        >
+          <ProductForm
+            product={editingProduct}
+            onClose={handleCloseForm}
+          />
+        </Modal>
+      )}
     </div>
   );
 };

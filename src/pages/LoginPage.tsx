@@ -163,10 +163,10 @@ const LoginPage: React.FC = () => {
             onClick={toggleMode}
             className="text-blue-600 hover:text-blue-700 font-medium transition-colors"
           >
-            {isSignUp
+            {/* {isSignUp
               ? '¿Ya tienes cuenta? Inicia sesión'
               : '¿No tienes cuenta? Crear una cuenta nueva'
-            }
+            } */}
           </button>
         </div>
       </div>
