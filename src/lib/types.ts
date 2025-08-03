@@ -37,6 +37,7 @@ export interface Stock {
 }
 
 export interface Sale {
+  payment_type: string;
   id: string;
   user_id: string;
   branch_id: string;

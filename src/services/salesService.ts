@@ -5,25 +5,25 @@ export class SalesService {
   async createSale(
     items: Array<{ productId: string; quantity: number; unitPrice: number }>,
     branchId: string,
-    userId: string
+    userId: string,
+    paymentType: 'QR' | 'EFECTIVO' | 'TARJETA'
   ): Promise<Sale> {
     const total = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
 
-    // Start transaction-like operation
     const { data: sale, error: saleError } = await supabase
       .from('sales')
       .insert({
         user_id: userId,
         branch_id: branchId,
         total,
-        sale_date: new Date().toISOString()
+        sale_date: new Date().toISOString(),
+        payment_type: paymentType
       })
       .select()
       .single();
 
     if (saleError) throw saleError;
 
-    // Insert sale items
     const saleItems = items.map(item => ({
       sale_id: sale.id,
       product_id: item.productId,
@@ -38,7 +38,7 @@ export class SalesService {
 
     if (itemsError) throw itemsError;
 
-    // Update stock for each item
+
     for (const item of items) {
       await this.updateStockAfterSale(item.productId, branchId, item.quantity);
     }
@@ -159,14 +159,18 @@ export class SalesService {
     return {
       monthlyTotal,
       totalSales: totalSales || 0,
-      topProduct: topProductData?.[0]?.product ? {
-        name: topProductData[0].product.name,
-        total_sold: topProductData[0].quantity
-      } : undefined,
-      lowStockProducts: lowStockData?.map(item => ({
-        name: item.product?.name || '',
-        quantity: item.quantity
-      })) || [],
+      topProduct: (Array.isArray(topProductData) && topProductData.length > 0 && Array.isArray(topProductData[0].product) && topProductData[0].product.length > 0)
+        ? {
+            name: topProductData[0].product[0].name,
+            total_sold: topProductData[0].quantity
+          }
+        : undefined,
+      lowStockProducts: Array.isArray(lowStockData)
+        ? lowStockData.map(item => ({
+            name: Array.isArray(item.product) && item.product.length > 0 ? item.product[0].name : '',
+            quantity: item.quantity
+          }))
+        : [],
       dailySales
     };
   }

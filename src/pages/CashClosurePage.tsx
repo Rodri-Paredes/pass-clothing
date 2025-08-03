@@ -8,6 +8,9 @@ import { useSalesStore } from '../store/salesStore';
 import { cashClosureService } from '../services/cashClosureService';
 import type { DailyReport } from '../lib/types';
 
+// Nuevo: funciones para totales por tipo de pago
+import { supabase } from '../lib/supabase';
+
 const CashClosurePage: React.FC = () => {
   const { activeBranch, user } = useAuthStore();
   const { sales } = useSalesStore();
@@ -20,12 +23,67 @@ const CashClosurePage: React.FC = () => {
   const [dailyReport, setDailyReport] = useState<DailyReport | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [totalSales, setTotalSales] = useState(0);
+  const [totalSalesCash, setTotalSalesCash] = useState(0);
+  const [totalSalesQR, setTotalSalesQR] = useState(0);
+  const [totalSalesCard, setTotalSalesCard] = useState(0);
+  const [numberOfSales, setNumberOfSales] = useState(0);
+  const [productsSold, setProductsSold] = useState(0);
 
   useEffect(() => {
     if (activeBranch && selectedDate) {
       loadDailyReport();
+      loadTotals();
     }
   }, [activeBranch, selectedDate]);
+
+  // Nuevo: cargar totales por tipo de pago y fecha
+const loadTotals = async () => {
+  try {
+    // Total ventas (todos)
+    const { data: totalAll } = await supabase.rpc('sum_total_sales', {
+      payment_type_param: null,
+      sale_date_param: selectedDate,
+    });
+    setTotalSales(totalAll ?? 0);
+
+    // Total ventas efectivo
+    const { data: totalCash } = await supabase.rpc('sum_total_sales', {
+      payment_type_param: 'EFECTIVO',
+      sale_date_param: selectedDate,
+    });
+    setTotalSalesCash(totalCash ?? 0);
+
+    // Total ventas QR
+    const { data: totalQR } = await supabase.rpc('sum_total_sales', {
+      payment_type_param: 'QR',
+      sale_date_param: selectedDate,
+    });
+    setTotalSalesQR(totalQR ?? 0);
+
+    // Total ventas tarjeta
+    const { data: totalCard } = await supabase.rpc('sum_total_sales_card', {
+      sale_date_param: selectedDate,
+    });
+    setTotalSalesCard(totalCard ?? 0);
+
+    // Número de ventas
+    const { data: numSales } = await supabase.rpc('count_sales', {
+      sale_date_param: selectedDate,
+    });
+    setNumberOfSales(numSales ?? 0);
+
+    // Productos vendidos
+    const { data: prodSold } = await supabase.rpc('count_products_sold', {
+      sale_date_param: selectedDate,
+    });
+    setProductsSold(prodSold ?? 0);
+
+  } catch (error) {
+    console.error('Error loading payment totals:', error);
+  }
+};
+
 
   const loadDailyReport = async () => {
     if (!activeBranch) return;
@@ -142,56 +200,53 @@ const CashClosurePage: React.FC = () => {
 
       {dailyReport ? (
         <>
-          {/* Resumen del día */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
-              <div className="flex items-center space-x-4">
-                <div className="bg-white/20 p-3 rounded-full">
-                  <DollarSign className="h-6 w-6" />
-                </div>
-                <div>
-                  <p className="text-blue-100 text-sm">Total Ventas</p>
-                  <p className="text-2xl font-bold">{formatCurrency(dailyReport.totalSales)}</p>
-                </div>
-              </div>
-            </Card>
-
-            <Card className="bg-gradient-to-r from-green-500 to-green-600 text-white">
-              <div className="flex items-center space-x-4">
-                <div className="bg-white/20 p-3 rounded-full">
-                  <ShoppingCart className="h-6 w-6" />
-                </div>
-                <div>
-                  <p className="text-green-100 text-sm">Número de Ventas</p>
-                  <p className="text-2xl font-bold">{dailyReport.numberOfSales}</p>
-                </div>
-              </div>
-            </Card>
-
-            <Card className="bg-gradient-to-r from-purple-500 to-purple-600 text-white">
-              <div className="flex items-center space-x-4">
-                <div className="bg-white/20 p-3 rounded-full">
-                  <TrendingUp className="h-6 w-6" />
-                </div>
-                <div>
-                  <p className="text-purple-100 text-sm">Venta Promedio</p>
-                  <p className="text-2xl font-bold">{formatCurrency(dailyReport.averageSale)}</p>
-                </div>
-              </div>
-            </Card>
-
-            <Card className="bg-gradient-to-r from-orange-500 to-orange-600 text-white">
-              <div className="flex items-center space-x-4">
-                <div className="bg-white/20 p-3 rounded-full">
-                  <FileText className="h-6 w-6" />
-                </div>
-                <div>
-                  <p className="text-orange-100 text-sm">Productos Vendidos</p>
-                  <p className="text-2xl font-bold">{dailyReport.totalItemsSold}</p>
-                </div>
-              </div>
-            </Card>
-          </div>
+      {/* Resumen del día - Totales por tipo de pago y neto */}
+      <div className="w-full overflow-x-auto pb-2">
+        <div className="flex gap-4 min-w-[600px] sm:min-w-0 sm:grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+          <Card className="flex-1 min-w-[220px] bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-lg rounded-2xl p-4 flex flex-col items-center justify-center">
+            <div className="bg-white/30 p-4 rounded-full mb-2">
+              <DollarSign className="h-8 w-8 text-blue-900" />
+            </div>
+            <span className="text-base font-semibold text-blue-100">Total Ventas</span>
+            <span className="text-2xl font-extrabold text-white">{formatCurrency(totalSales)}</span>
+          </Card>
+          <Card className="flex-1 min-w-[220px] bg-gradient-to-br from-green-500 to-green-700 text-white shadow-lg rounded-2xl p-4 flex flex-col items-center justify-center">
+            <div className="bg-white/30 p-4 rounded-full mb-2">
+              <DollarSign className="h-8 w-8 text-green-900" />
+            </div>
+            <span className="text-base font-semibold text-green-100">Ventas Efectivo</span>
+            <span className="text-2xl font-extrabold text-white">{formatCurrency(totalSalesCash)}</span>
+          </Card>
+          <Card className="flex-1 min-w-[220px] bg-gradient-to-br from-cyan-500 to-indigo-600 text-white shadow-lg rounded-2xl p-4 flex flex-col items-center justify-center">
+            <div className="bg-white/30 p-4 rounded-full mb-2">
+              <DollarSign className="h-8 w-8 text-cyan-900" />
+            </div>
+            <span className="text-base font-semibold text-cyan-100">Ventas QR</span>
+            <span className="text-2xl font-extrabold text-white">{formatCurrency(totalSalesQR)}</span>
+          </Card>
+          <Card className="flex-1 min-w-[220px] bg-gradient-to-br from-pink-500 to-pink-700 text-white shadow-lg rounded-2xl p-4 flex flex-col items-center justify-center">
+            <div className="bg-white/30 p-4 rounded-full mb-2">
+              <DollarSign className="h-8 w-8 text-pink-900" />
+            </div>
+            <span className="text-base font-semibold text-pink-100">Ventas Tarjeta</span>
+            <span className="text-2xl font-extrabold text-white">{formatCurrency(totalSalesCard)}</span>
+          </Card>
+          <Card className="flex-1 min-w-[220px] bg-gradient-to-br from-purple-500 to-purple-700 text-white shadow-lg rounded-2xl p-4 flex flex-col items-center justify-center">
+            <div className="bg-white/30 p-4 rounded-full mb-2">
+              <ShoppingCart className="h-8 w-8 text-purple-900" />
+            </div>
+            <span className="text-base font-semibold text-purple-100">N° Ventas</span>
+            <span className="text-2xl font-extrabold text-white">{numberOfSales}</span>
+          </Card>
+          <Card className="flex-1 min-w-[220px] bg-gradient-to-br from-orange-500 to-orange-700 text-white shadow-lg rounded-2xl p-4 flex flex-col items-center justify-center">
+            <div className="bg-white/30 p-4 rounded-full mb-2">
+              <FileText className="h-8 w-8 text-orange-900" />
+            </div>
+            <span className="text-base font-semibold text-orange-100">Productos Vendidos</span>
+            <span className="text-2xl font-extrabold text-white">{productsSold}</span>
+          </Card>
+        </div>
+      </div>
 
           {/* Detalle de ventas */}
           <Card>

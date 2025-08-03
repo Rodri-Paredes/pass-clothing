@@ -12,7 +12,8 @@ interface SalesState {
   createSale: (
     items: Array<{ productId: string; quantity: number; unitPrice: number }>,
     branchId: string,
-    userId: string
+    userId: string,
+    paymentType: 'QR' | 'EFECTIVO' | 'TARJETA'
   ) => Promise<Sale>;
 }
 
@@ -43,8 +44,8 @@ export const useSalesStore = create<SalesState>((set, get) => ({
     }
   },
 
-  createSale: async (items, branchId, userId) => {
-    const sale = await salesService.createSale(items, branchId, userId);
+  createSale: async (items, branchId, userId, paymentType) => {
+    const sale = await salesService.createSale(items, branchId, userId, paymentType);
     set(state => ({
       sales: [sale, ...state.sales]
     }));
