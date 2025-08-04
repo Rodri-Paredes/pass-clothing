@@ -43,13 +43,13 @@ const DashboardPage: React.FC = () => {
       color: 'text-blue-600',
       bgColor: 'bg-blue-100'
     },
-    {
+    /* {
       name: 'Producto Top',
       value: dashboardStats?.topProduct?.name || 'N/A',
       icon: Package,
       color: 'text-purple-600',
       bgColor: 'bg-purple-100'
-    },
+    }, */
     {
       name: 'Stock Bajo',
       value: dashboardStats?.lowStockProducts?.length || 0,
@@ -112,14 +112,16 @@ const DashboardPage: React.FC = () => {
           </h3>
           <div className="space-y-3">
             {dashboardStats?.lowStockProducts?.length ? (
-              dashboardStats.lowStockProducts.map((product, index) => (
-                <div key={index} className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
-                  <span className="font-medium text-gray-900">{product.name}</span>
-                  <span className="text-orange-600 font-semibold">
-                    {product.quantity} unidades
-                  </span>
-                </div>
-              ))
+              dashboardStats.lowStockProducts.map((product, index) => {
+                return (
+                  <div key={index} className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
+                    <span className="font-medium text-gray-900">{product.name}</span>
+                    <span className="text-orange-600 font-semibold">
+                      {product.quantity} unidades
+                    </span>
+                  </div>
+                );
+              })
             ) : (
               <div className="text-center py-8 text-gray-500">
                 <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />

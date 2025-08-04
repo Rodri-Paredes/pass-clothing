@@ -167,8 +167,10 @@ export class SalesService {
         : undefined,
       lowStockProducts: Array.isArray(lowStockData)
         ? lowStockData.map(item => ({
-            name: Array.isArray(item.product) && item.product.length > 0 ? item.product[0].name : '',
-            quantity: item.quantity
+            name: (item.product && typeof item.product === 'object' && 'name' in item.product)
+              ? String(item.product.name)
+              : '',
+            quantity: typeof item.quantity === 'number' ? item.quantity : Number(item.quantity)
           }))
         : [],
       dailySales
