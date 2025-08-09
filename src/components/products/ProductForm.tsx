@@ -252,12 +252,17 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
               {...register('category', { required: 'La categoría es requerida' })}
               className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
-              <option value="">Seleccionar categoría</option>
-              <option value="Camisetas">Camisetas</option>
-              <option value="Pantalones">Pantalones</option>
-              <option value="Vestidos">Vestidos</option>
-              <option value="Zapatos">Zapatos</option>
-              <option value="Accesorios">Accesorios</option>
+      <option value="">Seleccionar categoría</option>
+<option value="Camisas">Camisas</option>
+<option value="Pantalones">Pantalones</option>
+<option value="Hoodies">Hoodies</option>
+<option value="Shorts">Shorts</option>
+<option value="Accesorios">Accesorios</option>
+<option value="Poleras">Poleras</option>
+<option value="Gorras">Gorras</option>
+<option value="Tops">Tops</option>
+<option value="TrackSuit Basic">TrackSuit Basic</option>
+
             </select>
             {errors.category && (
               <p className="text-sm text-red-600 mt-1">{errors.category.message}</p>
