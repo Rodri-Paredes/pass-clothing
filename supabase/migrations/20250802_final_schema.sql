@@ -240,7 +240,7 @@ INSERT INTO branches (name, address) VALUES
   ('Sucursal Sucre', 'Calle Ravelo 6, Sucre');
 
 
--- 12. FUNCIONES PARA REPORTES
+-- 12. FUNCIONES PARA REPORTES (sin conversión de zona horaria)
 CREATE OR REPLACE FUNCTION sum_total_sales(payment_type_param text, sale_date_param date)
 RETURNS decimal(10,2) AS $$
 DECLARE
@@ -271,5 +271,18 @@ BEGIN
     JOIN sales s ON s.id = si.sale_id
     WHERE s.sale_date::date = sale_date_param
   );
+END;
+$$ LANGUAGE plpgsql;
+
+-- Función para sumar ventas por tarjeta
+CREATE OR REPLACE FUNCTION sum_total_sales_card(sale_date_param date)
+RETURNS decimal(10,2) AS $$
+DECLARE
+  total_sum decimal(10,2);
+BEGIN
+  SELECT COALESCE(SUM(total),0) INTO total_sum 
+  FROM sales 
+  WHERE sale_date::date = sale_date_param AND payment_type = 'TARJETA';
+  RETURN total_sum;
 END;
 $$ LANGUAGE plpgsql;

@@ -119,9 +119,12 @@ export class SalesService {
     const { data: topProductData, error: topProductError } = await supabase
       .from('sale_items')
       .select(`
-        product_id,
+        variant_id,
         quantity,
-        product:products(name)
+        variant:product_variants(
+          *,
+          product:products(name)
+        )
       `)
       .limit(1);
 
@@ -132,7 +135,10 @@ export class SalesService {
       .from('stock')
       .select(`
         quantity,
-        product:products(name)
+        variant:product_variants(
+          *,
+          product:products(name)
+        )
       `)
       .eq('branch_id', branchId)
       .lt('quantity', 5)
@@ -161,16 +167,16 @@ export class SalesService {
     return {
       monthlyTotal,
       totalSales: totalSales || 0,
-      topProduct: (Array.isArray(topProductData) && topProductData.length > 0 && Array.isArray(topProductData[0].product) && topProductData[0].product.length > 0)
+      topProduct: (Array.isArray(topProductData) && topProductData.length > 0 && topProductData[0].variant?.product?.name)
         ? {
-            name: topProductData[0].product[0].name,
+            name: topProductData[0].variant.product.name,
             total_sold: topProductData[0].quantity
           }
         : undefined,
       lowStockProducts: Array.isArray(lowStockData)
         ? lowStockData.map(item => ({
-            name: (item.product && typeof item.product === 'object' && 'name' in item.product)
-              ? String(item.product.name)
+            name: (item.variant?.product?.name)
+              ? String(item.variant.product.name)
               : '',
             quantity: typeof item.quantity === 'number' ? item.quantity : Number(item.quantity)
           }))

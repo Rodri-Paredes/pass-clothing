@@ -16,8 +16,9 @@ const CashClosurePage: React.FC = () => {
   const { sales } = useSalesStore();
   const getLocalDateString = () => {
     const now = new Date();
-    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-    return now.toISOString().split('T')[0];
+    // Obtener la fecha en zona horaria de Bolivia (UTC-4)
+    const boliviaTime = new Date(now.getTime() - (4 * 60 * 60 * 1000)); // Restar 4 horas para UTC-4
+    return boliviaTime.toISOString().split('T')[0];
   };
   const [selectedDate, setSelectedDate] = useState(getLocalDateString());
   const [dailyReport, setDailyReport] = useState<DailyReport | null>(null);
