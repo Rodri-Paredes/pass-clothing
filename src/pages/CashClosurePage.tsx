@@ -38,45 +38,53 @@ const CashClosurePage: React.FC = () => {
     }
   }, [activeBranch, selectedDate]);
 
-  // Nuevo: cargar totales por tipo de pago y fecha
+  // Nuevo: cargar totales por tipo de pago y fecha por sucursal
 const loadTotals = async () => {
+  if (!activeBranch) return;
+  
   try {
-    // Total ventas (todos)
+    // Total ventas (todos) por sucursal
     const { data: totalAll } = await supabase.rpc('sum_total_sales', {
       payment_type_param: null,
       sale_date_param: selectedDate,
+      branch_id_param: activeBranch.id,
     });
     setTotalSales(totalAll ?? 0);
 
-    // Total ventas efectivo
+    // Total ventas efectivo por sucursal
     const { data: totalCash } = await supabase.rpc('sum_total_sales', {
       payment_type_param: 'EFECTIVO',
       sale_date_param: selectedDate,
+      branch_id_param: activeBranch.id,
     });
     setTotalSalesCash(totalCash ?? 0);
 
-    // Total ventas QR
+    // Total ventas QR por sucursal
     const { data: totalQR } = await supabase.rpc('sum_total_sales', {
       payment_type_param: 'QR',
       sale_date_param: selectedDate,
+      branch_id_param: activeBranch.id,
     });
     setTotalSalesQR(totalQR ?? 0);
 
-    // Total ventas tarjeta
+    // Total ventas tarjeta por sucursal
     const { data: totalCard } = await supabase.rpc('sum_total_sales_card', {
       sale_date_param: selectedDate,
+      branch_id_param: activeBranch.id,
     });
     setTotalSalesCard(totalCard ?? 0);
 
-    // Número de ventas
+    // Número de ventas por sucursal
     const { data: numSales } = await supabase.rpc('count_sales', {
       sale_date_param: selectedDate,
+      branch_id_param: activeBranch.id,
     });
     setNumberOfSales(numSales ?? 0);
 
-    // Productos vendidos
+    // Productos vendidos por sucursal
     const { data: prodSold } = await supabase.rpc('count_products_sold', {
       sale_date_param: selectedDate,
+      branch_id_param: activeBranch.id,
     });
     setProductsSold(prodSold ?? 0);
 
@@ -149,6 +157,20 @@ const loadTotals = async () => {
       day: 'numeric'
     });
   };
+
+  if (!activeBranch) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Sin sucursal seleccionada</h3>
+          <p className="text-gray-600">
+            Selecciona una sucursal para ver el cierre de caja
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -304,12 +326,12 @@ const loadTotals = async () => {
                     </tbody>
                   </table>
                 </div>
-              ) : (
-                <div className="text-center py-8">
-                  <ShoppingCart className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-600">No hay ventas registradas para esta fecha</p>
-                </div>
-              )}
+                             ) : (
+                 <div className="text-center py-8">
+                   <ShoppingCart className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                   <p className="text-gray-600">No hay ventas registradas para esta fecha en {activeBranch.name}</p>
+                 </div>
+               )}
             </div>
           </Card>
 
@@ -343,15 +365,15 @@ const loadTotals = async () => {
             </div>
           </Card>
         </>
-      ) : (
-        <Card className="text-center py-12">
-          <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No hay datos para esta fecha</h3>
-          <p className="text-gray-600">
-            Selecciona una fecha diferente o verifica que haya ventas registradas
-          </p>
-        </Card>
-      )}
+             ) : (
+         <Card className="text-center py-12">
+           <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+           <h3 className="text-lg font-medium text-gray-900 mb-2">No hay datos para esta fecha</h3>
+           <p className="text-gray-600">
+             No hay ventas registradas para {formatDate(selectedDate)} en {activeBranch.name}
+           </p>
+         </Card>
+       )}
     </div>
   );
 };
