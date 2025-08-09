@@ -181,29 +181,29 @@ const loadTotals = async () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Cierre de Caja</h1>
-          <p className="text-gray-600">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Cierre de Caja</h1>
+          <p className="text-sm sm:text-base text-gray-600">
             {activeBranch ? `Sucursal: ${activeBranch.name}` : 'Sin sucursal seleccionada'}
           </p>
         </div>
         
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex flex-col space-y-3 sm:flex-row sm:items-center sm:space-y-0 sm:space-x-3">
           <Input
             type="date"
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
             className="w-full sm:w-auto"
           />
-          <div className="flex gap-2">
+          <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-2">
             <Button
               onClick={handlePrintReport}
               disabled={!dailyReport}
               variant="secondary"
-              className="flex items-center space-x-2"
+              className="flex items-center justify-center space-x-2"
             >
               <Printer className="h-4 w-4" />
               <span>Imprimir</span>
@@ -212,7 +212,7 @@ const loadTotals = async () => {
               onClick={handleDownloadReport}
               disabled={!dailyReport}
               isLoading={isGeneratingReport}
-              className="flex items-center space-x-2"
+              className="flex items-center justify-center space-x-2"
             >
               <Download className="h-4 w-4" />
               <span>Descargar</span>
@@ -225,56 +225,56 @@ const loadTotals = async () => {
         <>
       {/* Resumen del día - Totales por tipo de pago y neto */}
       <div className="w-full overflow-x-auto pb-2">
-        <div className="flex gap-4 min-w-[600px] sm:min-w-0 sm:grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
-          <Card className="flex-1 min-w-[220px] bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-lg rounded-2xl p-4 flex flex-col items-center justify-center">
-            <div className="bg-white/30 p-4 rounded-full mb-2">
-              <DollarSign className="h-8 w-8 text-blue-900" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4 min-w-0">
+          <Card className="bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-lg rounded-2xl p-3 sm:p-4 flex flex-col items-center justify-center">
+            <div className="bg-white/30 p-2 sm:p-4 rounded-full mb-2">
+              <DollarSign className="h-6 w-6 sm:h-8 sm:w-8 text-blue-900" />
             </div>
-            <span className="text-base font-semibold text-blue-100">Total Ventas</span>
-            <span className="text-2xl font-extrabold text-white">{formatCurrency(totalSales)}</span>
+            <span className="text-xs sm:text-sm font-semibold text-blue-100 text-center">Total Ventas</span>
+            <span className="text-lg sm:text-xl lg:text-2xl font-extrabold text-white">{formatCurrency(totalSales)}</span>
           </Card>
-          <Card className="flex-1 min-w-[220px] bg-gradient-to-br from-green-500 to-green-700 text-white shadow-lg rounded-2xl p-4 flex flex-col items-center justify-center">
-            <div className="bg-white/30 p-4 rounded-full mb-2">
-              <DollarSign className="h-8 w-8 text-green-900" />
+          <Card className="bg-gradient-to-br from-green-500 to-green-700 text-white shadow-lg rounded-2xl p-3 sm:p-4 flex flex-col items-center justify-center">
+            <div className="bg-white/30 p-2 sm:p-4 rounded-full mb-2">
+              <DollarSign className="h-6 w-6 sm:h-8 sm:w-8 text-green-900" />
             </div>
-            <span className="text-base font-semibold text-green-100">Ventas Efectivo</span>
-            <span className="text-2xl font-extrabold text-white">{formatCurrency(totalSalesCash)}</span>
+            <span className="text-xs sm:text-sm font-semibold text-green-100 text-center">Ventas Efectivo</span>
+            <span className="text-lg sm:text-xl lg:text-2xl font-extrabold text-white">{formatCurrency(totalSalesCash)}</span>
           </Card>
-          <Card className="flex-1 min-w-[220px] bg-gradient-to-br from-cyan-500 to-indigo-600 text-white shadow-lg rounded-2xl p-4 flex flex-col items-center justify-center">
-            <div className="bg-white/30 p-4 rounded-full mb-2">
-              <DollarSign className="h-8 w-8 text-cyan-900" />
+          <Card className="bg-gradient-to-br from-cyan-500 to-indigo-600 text-white shadow-lg rounded-2xl p-3 sm:p-4 flex flex-col items-center justify-center">
+            <div className="bg-white/30 p-2 sm:p-4 rounded-full mb-2">
+              <DollarSign className="h-6 w-6 sm:h-8 sm:w-8 text-cyan-900" />
             </div>
-            <span className="text-base font-semibold text-cyan-100">Ventas QR</span>
-            <span className="text-2xl font-extrabold text-white">{formatCurrency(totalSalesQR)}</span>
+            <span className="text-xs sm:text-sm font-semibold text-cyan-100 text-center">Ventas QR</span>
+            <span className="text-lg sm:text-xl lg:text-2xl font-extrabold text-white">{formatCurrency(totalSalesQR)}</span>
           </Card>
-          <Card className="flex-1 min-w-[220px] bg-gradient-to-br from-pink-500 to-pink-700 text-white shadow-lg rounded-2xl p-4 flex flex-col items-center justify-center">
-            <div className="bg-white/30 p-4 rounded-full mb-2">
-              <DollarSign className="h-8 w-8 text-pink-900" />
+          <Card className="bg-gradient-to-br from-pink-500 to-pink-700 text-white shadow-lg rounded-2xl p-3 sm:p-4 flex flex-col items-center justify-center">
+            <div className="bg-white/30 p-2 sm:p-4 rounded-full mb-2">
+              <DollarSign className="h-6 w-6 sm:h-8 sm:w-8 text-pink-900" />
             </div>
-            <span className="text-base font-semibold text-pink-100">Ventas Tarjeta</span>
-            <span className="text-2xl font-extrabold text-white">{formatCurrency(totalSalesCard)}</span>
+            <span className="text-xs sm:text-sm font-semibold text-pink-100 text-center">Ventas Tarjeta</span>
+            <span className="text-lg sm:text-xl lg:text-2xl font-extrabold text-white">{formatCurrency(totalSalesCard)}</span>
           </Card>
-          <Card className="flex-1 min-w-[220px] bg-gradient-to-br from-purple-500 to-purple-700 text-white shadow-lg rounded-2xl p-4 flex flex-col items-center justify-center">
-            <div className="bg-white/30 p-4 rounded-full mb-2">
-              <ShoppingCart className="h-8 w-8 text-purple-900" />
+          <Card className="bg-gradient-to-br from-purple-500 to-purple-700 text-white shadow-lg rounded-2xl p-3 sm:p-4 flex flex-col items-center justify-center">
+            <div className="bg-white/30 p-2 sm:p-4 rounded-full mb-2">
+              <ShoppingCart className="h-6 w-6 sm:h-8 sm:w-8 text-purple-900" />
             </div>
-            <span className="text-base font-semibold text-purple-100">N° Ventas</span>
-            <span className="text-2xl font-extrabold text-white">{numberOfSales}</span>
+            <span className="text-xs sm:text-sm font-semibold text-purple-100 text-center">N° Ventas</span>
+            <span className="text-lg sm:text-xl lg:text-2xl font-extrabold text-white">{numberOfSales}</span>
           </Card>
-          <Card className="flex-1 min-w-[220px] bg-gradient-to-br from-orange-500 to-orange-700 text-white shadow-lg rounded-2xl p-4 flex flex-col items-center justify-center">
-            <div className="bg-white/30 p-4 rounded-full mb-2">
-              <FileText className="h-8 w-8 text-orange-900" />
+          <Card className="bg-gradient-to-br from-orange-500 to-orange-700 text-white shadow-lg rounded-2xl p-3 sm:p-4 flex flex-col items-center justify-center">
+            <div className="bg-white/30 p-2 sm:p-4 rounded-full mb-2">
+              <FileText className="h-6 w-6 sm:h-8 sm:w-8 text-orange-900" />
             </div>
-            <span className="text-base font-semibold text-orange-100">Productos Vendidos</span>
-            <span className="text-2xl font-extrabold text-white">{productsSold}</span>
+            <span className="text-xs sm:text-sm font-semibold text-orange-100 text-center">Productos Vendidos</span>
+            <span className="text-lg sm:text-xl lg:text-2xl font-extrabold text-white">{productsSold}</span>
           </Card>
         </div>
       </div>
 
           {/* Detalle de ventas */}
           <Card>
-            <div className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            <div className="p-4 sm:p-6">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-4">
                 Detalle de Ventas - {formatDate(selectedDate)}
               </h3>
               
@@ -283,19 +283,19 @@ const loadTotals = async () => {
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Hora
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Venta #
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Vendedor
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Artículos
                         </th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Total
                         </th>
                       </tr>
@@ -303,22 +303,22 @@ const loadTotals = async () => {
                     <tbody className="bg-white divide-y divide-gray-200">
                       {dailyReport.sales.map((sale) => (
                         <tr key={sale.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900">
                             {new Date(sale.sale_date).toLocaleTimeString('es-ES', {
                               hour: '2-digit',
                               minute: '2-digit'
                             })}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-xs sm:text-sm font-medium text-gray-900">
                             #{sale.id.slice(-8)}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900">
                             {sale.user?.name || 'N/A'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900">
                             {sale.sale_items?.length || 0}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-right">
+                          <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-xs sm:text-sm font-medium text-gray-900 text-right">
                             {formatCurrency(sale.total)}
                           </td>
                         </tr>
@@ -326,19 +326,19 @@ const loadTotals = async () => {
                     </tbody>
                   </table>
                 </div>
-                             ) : (
-                 <div className="text-center py-8">
-                   <ShoppingCart className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                   <p className="text-gray-600">No hay ventas registradas para esta fecha en {activeBranch.name}</p>
-                 </div>
-               )}
+                              ) : (
+                  <div className="text-center py-8">
+                    <ShoppingCart className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-sm sm:text-base text-gray-600">No hay ventas registradas para esta fecha en {activeBranch.name}</p>
+                  </div>
+                )}
             </div>
           </Card>
 
           {/* Productos más vendidos */}
           <Card>
-            <div className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            <div className="p-4 sm:p-6">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-4">
                 Productos Más Vendidos
               </h3>
               
@@ -346,34 +346,34 @@ const loadTotals = async () => {
                 <div className="space-y-3">
                   {dailyReport.topProducts.map((product, index) => (
                     <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <div className="bg-blue-100 text-blue-800 text-sm font-medium px-2 py-1 rounded-full">
+                      <div className="flex items-center space-x-3 min-w-0 flex-1">
+                        <div className="bg-blue-100 text-blue-800 text-xs sm:text-sm font-medium px-2 py-1 rounded-full flex-shrink-0">
                           #{index + 1}
                         </div>
-                        <span className="font-medium text-gray-900">{product.name}</span>
+                        <span className="font-medium text-gray-900 truncate">{product.name}</span>
                       </div>
-                      <div className="text-right">
-                        <p className="font-semibold text-gray-900">{product.quantity} unidades</p>
-                        <p className="text-sm text-gray-600">{formatCurrency(product.total)}</p>
+                      <div className="text-right flex-shrink-0">
+                        <p className="font-semibold text-gray-900 text-sm sm:text-base">{product.quantity} unidades</p>
+                        <p className="text-xs sm:text-sm text-gray-600">{formatCurrency(product.total)}</p>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-gray-600 text-center py-4">No hay datos de productos para mostrar</p>
+                <p className="text-sm sm:text-base text-gray-600 text-center py-4">No hay datos de productos para mostrar</p>
               )}
             </div>
           </Card>
         </>
-             ) : (
-         <Card className="text-center py-12">
-           <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-           <h3 className="text-lg font-medium text-gray-900 mb-2">No hay datos para esta fecha</h3>
-           <p className="text-gray-600">
-             No hay ventas registradas para {formatDate(selectedDate)} en {activeBranch.name}
-           </p>
-         </Card>
-       )}
+              ) : (
+          <Card className="text-center py-12">
+            <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">No hay datos para esta fecha</h3>
+            <p className="text-sm sm:text-base text-gray-600">
+              No hay ventas registradas para {formatDate(selectedDate)} en {activeBranch.name}
+            </p>
+          </Card>
+        )}
     </div>
   );
 };

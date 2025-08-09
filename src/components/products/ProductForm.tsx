@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { X, Upload, Plus } from 'lucide-react';
+import { X, Upload } from 'lucide-react';
 import Button from '../ui/Button';
 import { useProductStore } from '../../store/productStore';
 import { useAuthStore } from '../../store/authStore';
