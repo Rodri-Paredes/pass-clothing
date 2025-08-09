@@ -3,7 +3,7 @@ import type { Sale, SaleItem, DashboardStats } from '../lib/types';
 
 export class SalesService {
   async createSale(
-    items: Array<{ productId: string; quantity: number; unitPrice: number }>,
+    items: Array<{ variantId: string; quantity: number; unitPrice: number }>,
     branchId: string,
     userId: string,
     paymentType: 'QR' | 'EFECTIVO' | 'TARJETA'
@@ -26,7 +26,7 @@ export class SalesService {
 
     const saleItems = items.map(item => ({
       sale_id: sale.id,
-      product_id: item.productId,
+      variant_id: item.variantId,
       quantity: item.quantity,
       unit_price: item.unitPrice,
       subtotal: item.quantity * item.unitPrice
@@ -38,19 +38,18 @@ export class SalesService {
 
     if (itemsError) throw itemsError;
 
-
     for (const item of items) {
-      await this.updateStockAfterSale(item.productId, branchId, item.quantity);
+      await this.updateStockAfterSale(item.variantId, branchId, item.quantity);
     }
 
     return sale;
   }
 
-  private async updateStockAfterSale(productId: string, branchId: string, soldQuantity: number): Promise<void> {
+  private async updateStockAfterSale(variantId: string, branchId: string, soldQuantity: number): Promise<void> {
     const { data: currentStock, error: stockError } = await supabase
       .from('stock')
       .select('quantity')
-      .eq('product_id', productId)
+      .eq('variant_id', variantId)
       .eq('branch_id', branchId)
       .single();
 
@@ -64,7 +63,7 @@ export class SalesService {
         quantity: newQuantity,
         updated_at: new Date().toISOString()
       })
-      .eq('product_id', productId)
+      .eq('variant_id', variantId)
       .eq('branch_id', branchId);
 
     if (updateError) throw updateError;
@@ -79,7 +78,10 @@ export class SalesService {
         branch:branches(name),
         sale_items(
           *,
-          product:products(name)
+          variant:product_variants(
+            *,
+            product:products(name)
+          )
         )
       `)
       .eq('branch_id', branchId)

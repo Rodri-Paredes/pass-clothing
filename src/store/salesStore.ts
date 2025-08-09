@@ -10,7 +10,7 @@ interface SalesState {
   loadSalesByBranch: (branchId: string) => Promise<void>;
   loadDashboardStats: (branchId: string) => Promise<void>;
   createSale: (
-    items: Array<{ productId: string; quantity: number; unitPrice: number }>,
+    items: Array<{ variantId: string; quantity: number; unitPrice: number }>,
     branchId: string,
     userId: string,
     paymentType: 'QR' | 'EFECTIVO' | 'TARJETA'

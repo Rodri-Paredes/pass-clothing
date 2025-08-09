@@ -14,25 +14,35 @@ export interface User {
   created_at: string;
 }
 
+
 export interface Product {
   id: string;
   name: string;
   description: string;
   category: string;
-  size: string;
   price: number;
   image_url?: string;
   created_at: string;
+  variants?: ProductVariant[];
 }
+
+export interface ProductVariant {
+  id: string;
+  product_id: string;
+  size: string;
+  created_at: string;
+  product?: Product;
+}
+
 
 export interface Stock {
   id: string;
-  product_id: string;
+  variant_id: string;
   branch_id: string;
   quantity: number;
   created_at: string;
   updated_at: string;
-  product?: Product;
+  variant?: ProductVariant;
   branch?: Branch;
 }
 
@@ -49,14 +59,15 @@ export interface Sale {
   branch?: Branch;
 }
 
+
 export interface SaleItem {
   id: string;
   sale_id: string;
-  product_id: string;
+  variant_id: string;
   quantity: number;
   unit_price: number;
   subtotal: number;
-  product?: Product;
+  variant?: ProductVariant;
 }
 
 export interface DashboardStats {

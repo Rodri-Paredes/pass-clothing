@@ -1,18 +1,20 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Upload, X } from 'lucide-react';
+import { X, Upload, Plus } from 'lucide-react';
 import Button from '../ui/Button';
-import Input from '../ui/Input';
 import { useProductStore } from '../../store/productStore';
 import { useAuthStore } from '../../store/authStore';
-import { CATEGORIES, SIZES } from '../../lib/constants';
 
 interface ProductFormData {
   name: string;
   description: string;
   category: string;
-  size: string;
   price: number;
+  variants: Array<{
+    size: string;
+    stock: { [branchId: string]: number };
+  }>;
 }
 
 interface ProductFormProps {
@@ -21,54 +23,63 @@ interface ProductFormProps {
 }
 
 const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
-  const { createProduct, updateProduct, uploadImage, getStockByProduct, updateStock } = useProductStore();
-  const { branches, activeBranch } = useAuthStore();
+  const { createProduct, updateProduct, uploadImage, updateStock, createProductVariant, getStockByProduct, loadProducts } = useProductStore();
+  const { branches } = useAuthStore();
   const [isLoading, setIsLoading] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>('');
-  const [stockData, setStockData] = useState<{ [branchId: string]: number }>({});
+  const [variants, setVariants] = useState<Array<{ size: string; stock: { [branchId: string]: number } }>>([
+    { size: '', stock: branches.reduce((acc, branch) => { acc[branch.id] = 0; return acc; }, {} as { [branchId: string]: number }) }
+  ]);
 
   const { register, handleSubmit, formState: { errors } } = useForm<ProductFormData>({
     defaultValues: product ? {
       name: product.name,
       description: product.description,
       category: product.category,
-      size: product.size,
-      price: product.price
-    } : {}
+      price: product.price ?? 0,
+      variants: product.variants?.map((variant: any) => ({
+        size: variant.size,
+        stock: branches.reduce((acc: any, branch: any) => {
+          acc[branch.id] = 0; // Initialize with 0, will be loaded separately
+          return acc;
+        }, {})
+      })) || []
+    } : { 
+      price: 0,
+      variants: [{ size: '', stock: branches.reduce((acc, branch) => { acc[branch.id] = 0; return acc; }, {} as { [branchId: string]: number }) }] 
+    }
   });
 
   useEffect(() => {
     if (product) {
       setImagePreview(product.image_url || '');
-      loadStockData();
-    } else {
-      // Initialize stock data for new products
-      const initialStock: { [branchId: string]: number } = {};
-      branches.forEach(branch => {
-        initialStock[branch.id] = 0;
-      });
-      setStockData(initialStock);
-    }
-  }, [product, branches]);
-
-  const loadStockData = async () => {
-    if (!product) return;
-    
-    try {
-      const stockByProduct = await getStockByProduct(product.id);
-      const stockMap: { [branchId: string]: number } = {};
       
-      branches.forEach(branch => {
-        const branchStock = stockByProduct.find(s => s.branch_id === branch.id);
-        stockMap[branch.id] = branchStock?.quantity || 0;
-      });
-      
-      setStockData(stockMap);
-    } catch (error) {
-      console.error('Error loading stock data:', error);
+      // Load stock for existing variants
+      if (product.variants) {
+        const loadStockForVariants = async () => {
+          const updatedVariants = await Promise.all(
+            product.variants.map(async (variant: any) => {
+              const stockData = await getStockByProduct(variant.id);
+              const stock = branches.reduce((acc: any, branch: any) => {
+                const stockItem = stockData.find((s: any) => s.branch_id === branch.id);
+                acc[branch.id] = stockItem ? stockItem.quantity : 0;
+                return acc;
+              }, {});
+              
+              return {
+                size: variant.size,
+                stock
+              };
+            })
+          );
+          setVariants(updatedVariants);
+        };
+        
+        loadStockForVariants();
+      }
     }
-  };
+  }, [product, branches, getStockByProduct]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -82,29 +93,41 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
     }
   };
 
-  const handleStockChange = (branchId: string, quantity: number) => {
-    setStockData(prev => ({
-      ...prev,
-      [branchId]: Math.max(0, quantity)
-    }));
+  const handleVariantChange = (index: number, field: string, value: any) => {
+    setVariants(prev => prev.map((variant, i) => i === index ? { ...variant, [field]: value } : variant));
+  };
+
+  const handleStockChange = (variantIndex: number, branchId: string, quantity: number) => {
+    setVariants(prev => prev.map((variant, i) =>
+      i === variantIndex ? { ...variant, stock: { ...variant.stock, [branchId]: Math.max(0, quantity) } } : variant
+    ));
+  };
+
+  const addVariant = () => {
+    setVariants(prev => ([...prev, { size: '', stock: branches.reduce((acc, branch) => { acc[branch.id] = 0; return acc; }, {} as { [branchId: string]: number }) }]));
+  };
+
+  const removeVariant = (index: number) => {
+    setVariants(prev => prev.filter((_, i) => i !== index));
   };
 
   const onSubmit = async (data: ProductFormData) => {
     setIsLoading(true);
-    
     try {
       let imageUrl = product?.image_url || '';
-      
       if (imageFile) {
         imageUrl = await uploadImage(imageFile);
       }
-
+      
+      // Create product with the price
       const productData = {
-        ...data,
-        price: Number(data.price),
-        image_url: imageUrl
+        name: data.name,
+        description: data.description,
+        category: data.category,
+        image_url: imageUrl,
+        price: data.price
       };
-
+      
       let savedProduct;
       if (product) {
         await updateProduct(product.id, productData);
@@ -112,12 +135,42 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
       } else {
         savedProduct = await createProduct(productData);
       }
-
-      // Update stock for all branches
-      for (const [branchId, quantity] of Object.entries(stockData)) {
-        await updateStock(savedProduct.id, branchId, quantity);
+      
+      // Create/update variants and stock
+      console.log('Creating/updating variants:', variants);
+      for (const variant of variants) {
+        let variantObj;
+        
+        // Check if this variant already exists (for editing)
+        if (product && product.variants) {
+          const existingVariant = product.variants.find((v: any) => v.size === variant.size);
+          if (existingVariant) {
+            variantObj = existingVariant;
+          } else {
+            console.log('Creating new variant:', { product_id: savedProduct.id, size: variant.size });
+            variantObj = await createProductVariant({
+              product_id: savedProduct.id,
+              size: variant.size
+            });
+            console.log('Variant created:', variantObj);
+          }
+        } else {
+          console.log('Creating new variant (new product):', { product_id: savedProduct.id, size: variant.size });
+          variantObj = await createProductVariant({
+            product_id: savedProduct.id,
+            size: variant.size
+          });
+          console.log('Variant created (new product):', variantObj);
+        }
+        
+        for (const [branchId, quantity] of Object.entries(variant.stock)) {
+          await updateStock(variantObj.id, branchId, quantity);
+        }
       }
-
+      
+      // Reload products to reflect changes
+      await loadProducts();
+      console.log('Product saved successfully, variants:', variants);
       onClose();
     } catch (error) {
       console.error('Error saving product:', error);
@@ -178,22 +231,111 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
 
         {/* Product Details */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Input
-            label="Nombre del Producto"
-            {...register('name', { required: 'El nombre es requerido' })}
-            error={errors.name?.message}
-          />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Nombre del Producto
+            </label>
+            <input
+              {...register('name', { required: 'El nombre es requerido' })}
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+            {errors.name && (
+              <p className="text-sm text-red-600 mt-1">{errors.name.message}</p>
+            )}
+          </div>
 
-          <Input
-            label="Precio"
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Categoría
+            </label>
+            <select
+              {...register('category', { required: 'La categoría es requerida' })}
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="">Seleccionar categoría</option>
+              <option value="Camisetas">Camisetas</option>
+              <option value="Pantalones">Pantalones</option>
+              <option value="Vestidos">Vestidos</option>
+              <option value="Zapatos">Zapatos</option>
+              <option value="Accesorios">Accesorios</option>
+            </select>
+            {errors.category && (
+              <p className="text-sm text-red-600 mt-1">{errors.category.message}</p>
+            )}
+          </div>
+        </div>
+
+        {/* Price */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Precio
+          </label>
+          <input
             type="number"
             step="0.01"
+            min="0"
             {...register('price', { 
               required: 'El precio es requerido',
               min: { value: 0, message: 'El precio debe ser mayor a 0' }
             })}
-            error={errors.price?.message}
+            className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
+          {errors.price && (
+            <p className="text-sm text-red-600 mt-1">{errors.price.message}</p>
+          )}
+        </div>
+
+        {/* Variants */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Tallas y Stock
+          </label>
+          {variants.map((variant, idx) => (
+            <div key={idx} className="border border-gray-200 rounded-lg p-4 mb-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Talla
+                  </label>
+                  <input
+                    type="text"
+                    value={variant.size}
+                    onChange={(e) => handleVariantChange(idx, 'size', e.target.value)}
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    placeholder="Ej: S, M, L, XL"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <button
+                    type="button"
+                    onClick={() => removeVariant(idx)}
+                    className="text-red-600 hover:text-red-800 text-sm font-medium"
+                  >
+                    Eliminar Talla
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {branches.map(branch => (
+                  <div key={branch.id} className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-gray-700">{branch.name}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={variant.stock[branch.id] || 0}
+                      onChange={e => handleStockChange(idx, branch.id, parseInt(e.target.value) || 0)}
+                      className="w-16 px-2 py-1 border border-gray-300 rounded text-center focus:border-blue-500 focus:outline-none"
+                    />
+                    <span className="text-xs text-gray-600">unidades</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+          <Button type="button" variant="ghost" onClick={addVariant}>
+            + Agregar Talla
+          </Button>
         </div>
 
         <div>
@@ -210,82 +352,21 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
           )}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Categoría
-            </label>
-            <select
-              {...register('category', { required: 'La categoría es requerida' })}
-              className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              <option value="">Seleccionar categoría</option>
-              {CATEGORIES.map(category => (
-                <option key={category} value={category}>{category}</option>
-              ))}
-            </select>
-            {errors.category && (
-              <p className="text-sm text-red-600 mt-1">{errors.category.message}</p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Talla
-            </label>
-            <select
-              {...register('size', { required: 'La talla es requerida' })}
-              className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              <option value="">Seleccionar talla</option>
-              {SIZES.map(size => (
-                <option key={size} value={size}>{size}</option>
-              ))}
-            </select>
-            {errors.size && (
-              <p className="text-sm text-red-600 mt-1">{errors.size.message}</p>
-            )}
-          </div>
-        </div>
-
-        {/* Stock by Branch */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-3">
-            Stock por Sucursal
-          </label>
-          <div className="space-y-3">
-            {branches.map(branch => (
-              <div key={branch.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <span className="font-medium text-gray-900">{branch.name}</span>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="number"
-                    min="0"
-                    value={stockData[branch.id] || 0}
-                    onChange={(e) => handleStockChange(branch.id, parseInt(e.target.value) || 0)}
-                    className="w-20 px-2 py-1 border border-gray-300 rounded text-center focus:border-blue-500 focus:outline-none"
-                  />
-                  <span className="text-sm text-gray-600">unidades</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+        {/* Form Actions */}
+        <div className="flex justify-end space-x-3">
           <Button
             type="button"
             variant="ghost"
             onClick={onClose}
+            disabled={isLoading}
           >
             Cancelar
           </Button>
           <Button
             type="submit"
-            isLoading={isLoading}
+            disabled={isLoading}
           >
-            {product ? 'Actualizar' : 'Crear'} Producto
+            {isLoading ? 'Guardando...' : product ? 'Actualizar Producto' : 'Crear Producto'}
           </Button>
         </div>
       </form>

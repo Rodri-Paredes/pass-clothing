@@ -2,19 +2,20 @@ import { create } from 'zustand';
 import type { Product, Stock } from '../lib/types';
 import { productService } from '../services/productService';
 
+
 interface ProductState {
   products: Product[];
   stock: Stock[];
   isLoading: boolean;
-  
   loadProducts: () => Promise<void>;
   loadStockByBranch: (branchId: string) => Promise<void>;
   createProduct: (product: Omit<Product, 'id' | 'created_at'>) => Promise<Product>;
   updateProduct: (id: string, updates: Partial<Product>) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
-  updateStock: (productId: string, branchId: string, quantity: number) => Promise<void>;
+  createProductVariant: (variant: { product_id: string; size: string }) => Promise<any>;
+  updateStock: (variantId: string, branchId: string, quantity: number) => Promise<void>;
   uploadImage: (file: File) => Promise<string>;
-  getStockByProduct: (productId: string) => Promise<Stock[]>;
+  getStockByProduct: (variantId: string) => Promise<Stock[]>;
 }
 
 export const useProductStore = create<ProductState>((set, get) => ({
@@ -66,9 +67,12 @@ export const useProductStore = create<ProductState>((set, get) => ({
     }));
   },
 
-  updateStock: async (productId: string, branchId: string, quantity: number) => {
-    await productService.updateStock(productId, branchId, quantity);
-    // Reload stock for the current branch
+  createProductVariant: async (variant) => {
+    return await productService.createProductVariant(variant);
+  },
+
+  updateStock: async (variantId: string, branchId: string, quantity: number) => {
+    await productService.updateStock(variantId, branchId, quantity);
     await get().loadStockByBranch(branchId);
   },
 
@@ -76,7 +80,7 @@ export const useProductStore = create<ProductState>((set, get) => ({
     return await productService.uploadProductImage(file);
   },
 
-  getStockByProduct: async (productId: string) => {
-    return await productService.getStockByProduct(productId);
+  getStockByProduct: async (variantId: string) => {
+    return await productService.getStockByProduct(variantId);
   }
 }));

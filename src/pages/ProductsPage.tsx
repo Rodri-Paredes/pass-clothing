@@ -114,7 +114,17 @@ const ProductsPage: React.FC = () => {
                 <p className="text-sm text-gray-600 line-clamp-2">{product.description}</p>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-500">{product.category}</span>
-                  <span className="text-sm font-medium text-gray-900">Talla {product.size}</span>
+                  {product.variants && product.variants.length > 0 ? (
+                    <div className="flex flex-col">
+                      {product.variants.map(variant => (
+                        <span key={variant.id} className="text-xs font-medium text-gray-900">
+                          Talla {variant.size}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-gray-400">Sin tallas</span>
+                  )}
                 </div>
                 <div className="flex justify-between items-center pt-2">
                   <span className="text-lg font-bold text-blue-600">

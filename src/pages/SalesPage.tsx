@@ -48,25 +48,30 @@ const SalesPage: React.FC = () => {
   };
 
   // Filtrar productos disponibles con stock
+  // Adapt availableProducts to filter by variants with stock
   const availableProducts = products.filter(product => {
-    const productStock = stock.find(s => s.product_id === product.id);
-    const hasStock = productStock && productStock.quantity > 0;
+    // At least one variant with stock
+    const hasVariantWithStock = (product.variants || []).some((variant: any) => {
+      const variantStock = stock.find(s => s.variant_id === variant.id);
+      return variantStock && variantStock.quantity > 0;
+    });
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          product.description.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = !selectedCategory || product.category === selectedCategory;
-    return hasStock && matchesSearch && matchesCategory;
+    return hasVariantWithStock && matchesSearch && matchesCategory;
   });
 
   const handleAddToCart = (product: any) => {
-    const productStock = stock.find(s => s.product_id === product.id);
-    if (!productStock || productStock.quantity === 0) return;
+    // product must have variant_id
+    const variantStock = stock.find(s => s.variant_id === product.variant_id);
+    if (!variantStock || variantStock.quantity === 0) return;
 
     setCart((prev) => {
-      const existingItem = prev.find((item) => item.product.id === product.id);
+      const existingItem = prev.find((item) => item.product.id === product.id && item.product.variant_id === product.variant_id);
       if (existingItem) {
         if (existingItem.quantity < existingItem.availableStock) {
           return prev.map((item) =>
-            item.product.id === product.id
+            item.product.id === product.id && item.product.variant_id === product.variant_id
               ? { ...item, quantity: item.quantity + 1 }
               : item
           );
@@ -76,28 +81,30 @@ const SalesPage: React.FC = () => {
       return [...prev, { 
         product, 
         quantity: 1, 
-        availableStock: productStock.quantity 
+        availableStock: variantStock.quantity 
       }];
     });
   };
 
-  const handleQuantityChange = (productId: string, quantity: number) => {
+  const handleQuantityChange = (productId: string, variantId: string, quantity: number) => {
     if (quantity <= 0) {
-      handleRemoveFromCart(productId);
+      handleRemoveFromCart(productId, variantId);
       return;
     }
 
     setCart((prev) =>
       prev.map((item) =>
-        item.product.id === productId 
+        item.product.id === productId && item.product.variant_id === variantId
           ? { ...item, quantity: Math.min(quantity, item.availableStock) }
           : item
       )
     );
   };
 
-  const handleRemoveFromCart = (productId: string) => {
-    setCart((prev) => prev.filter((item) => item.product.id !== productId));
+  const handleRemoveFromCart = (productId: string, variantId: string) => {
+    setCart((prev) => prev.filter((item) => 
+      !(item.product.id === productId && item.product.variant_id === variantId)
+    ));
   };
 
   const getTotalAmount = () => {
@@ -110,7 +117,7 @@ const SalesPage: React.FC = () => {
     setIsProcessingSale(true);
     try {
       const items = cart.map(item => ({
-        productId: item.product.id,
+        variantId: item.product.variant_id,
         quantity: item.quantity,
         unitPrice: item.product.price
       }));
@@ -174,47 +181,48 @@ const SalesPage: React.FC = () => {
               {/* Grid de productos */}
               {availableProducts.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
-                  {availableProducts.map((product) => {
-                    const productStock = stock.find(s => s.product_id === product.id);
-                    const cartItem = cart.find(item => item.product.id === product.id);
-                    
-                    return (
-                      <div
-                        key={product.id}
-                        className="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow cursor-pointer bg-white"
-                        onClick={() => handleAddToCart(product)}
-                      >
-                        <div className="aspect-square bg-gray-100 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
-                          {product.image_url ? (
-                            <img
-                              src={product.image_url}
-                              alt={product.name}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <Package className="w-8 h-8 text-gray-400" />
+                  {availableProducts.flatMap((product) =>
+                    (product.variants || []).map((variant: any) => {
+                      const variantStock = stock.find(s => s.variant_id === variant.id);
+                      const cartItem = cart.find(item => item.product.id === product.id && item.product.variant_id === variant.id);
+                      return (
+                        <div
+                          key={variant.id}
+                          className="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow cursor-pointer bg-white"
+                          onClick={() => handleAddToCart({ ...product, variant_id: variant.id, size: variant.size, price: product.price })}
+                        >
+                          <div className="aspect-square bg-gray-100 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
+                            {product.image_url ? (
+                              <img
+                                src={product.image_url}
+                                alt={product.name}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <Package className="w-8 h-8 text-gray-400" />
+                            )}
+                          </div>
+                          <h3 className="font-semibold text-gray-900 text-sm mb-1 truncate">
+                            {product.name}
+                          </h3>
+                          <p className="text-xs text-gray-600 mb-2">{product.category} - Talla: {variant.size}</p>
+                          <div className="flex justify-between items-center">
+                            <span className="font-bold text-blue-600">
+                              ${product.price.toFixed(2)}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              Stock: {variantStock?.quantity || 0}
+                            </span>
+                          </div>
+                          {cartItem && (
+                            <div className="mt-2 text-xs text-green-600 font-medium">
+                              En carrito: {cartItem.quantity}
+                            </div>
                           )}
                         </div>
-                        <h3 className="font-semibold text-gray-900 text-sm mb-1 truncate">
-                          {product.name}
-                        </h3>
-                        <p className="text-xs text-gray-600 mb-2">{product.category} - {product.size}</p>
-                        <div className="flex justify-between items-center">
-                          <span className="font-bold text-blue-600">
-                            ${product.price.toFixed(2)}
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            Stock: {productStock?.quantity || 0}
-                          </span>
-                        </div>
-                        {cartItem && (
-                          <div className="mt-2 text-xs text-green-600 font-medium">
-                            En carrito: {cartItem.quantity}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                      );
+                    })
+                  )}
                 </div>
               ) : (
                 <div className="text-center py-8 text-gray-500">
@@ -268,7 +276,7 @@ const SalesPage: React.FC = () => {
                             <Button
                               size="sm"
                               variant="ghost"
-                              onClick={() => handleQuantityChange(item.product.id, item.quantity - 1)}
+                              onClick={() => handleQuantityChange(item.product.id, item.product.variant_id, item.quantity - 1)}
                               className="h-8 w-8 p-0 border border-gray-200"
                             >
                               <Minus className="h-4 w-4" />
@@ -279,7 +287,7 @@ const SalesPage: React.FC = () => {
                             <Button
                               size="sm"
                               variant="ghost"
-                              onClick={() => handleQuantityChange(item.product.id, item.quantity + 1)}
+                              onClick={() => handleQuantityChange(item.product.id, item.product.variant_id, item.quantity + 1)}
                               disabled={item.quantity >= item.availableStock}
                               className="h-8 w-8 p-0 border border-gray-200"
                             >
@@ -295,7 +303,7 @@ const SalesPage: React.FC = () => {
                           <Button
                             size="sm"
                             variant="danger"
-                            onClick={() => handleRemoveFromCart(item.product.id)}
+                            onClick={() => handleRemoveFromCart(item.product.id, item.product.variant_id)}
                             className="w-full mt-1"
                           >
                             Quitar
@@ -374,6 +382,8 @@ const SalesPage: React.FC = () => {
                         disabled={cart.length === 0}
                       >
                         Limpiar Carrito
+
+
                       </Button>
                     </div>
                   </div>
