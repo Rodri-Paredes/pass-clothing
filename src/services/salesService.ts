@@ -1,14 +1,21 @@
 import { supabase } from '../lib/supabase';
-import type { Sale, SaleItem, DashboardStats } from '../lib/types';
+import type { Sale, SaleItem, DashboardStats, MixedPaymentBreakdown, SalesWithDiscounts } from '../lib/types';
 
 export class SalesService {
   async createSale(
     items: Array<{ variantId: string; quantity: number; unitPrice: number }>,
     branchId: string,
     userId: string,
-    paymentType: 'QR' | 'EFECTIVO' | 'TARJETA'
+    paymentType: 'QR' | 'EFECTIVO' | 'TARJETA' | 'MIXTO',
+    discountAmount: number = 0,
+    paymentDetails?: {
+      efectivo?: number;
+      qr?: number;
+      tarjeta?: number;
+    }
   ): Promise<Sale> {
-    const total = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+    const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+    const total = Math.max(0, subtotal - discountAmount);
 
     // Verificar stock antes de crear la venta
     for (const item of items) {
@@ -26,15 +33,24 @@ export class SalesService {
     }
 
     // Crear la venta
+    const saleData: any = {
+      user_id: userId,
+      branch_id: branchId,
+      subtotal,
+      discount_amount: discountAmount,
+      total,
+      sale_date: new Date().toISOString(),
+      payment_type: paymentType
+    };
+
+    // Agregar detalles de pago mixto si es necesario
+    if (paymentType === 'MIXTO' && paymentDetails) {
+      saleData.payment_details = paymentDetails;
+    }
+
     const { data: sale, error: saleError } = await supabase
       .from('sales')
-      .insert({
-        user_id: userId,
-        branch_id: branchId,
-        total,
-        sale_date: new Date().toISOString(),
-        payment_type: paymentType
-      })
+      .insert(saleData)
       .select()
       .single();
 
@@ -116,6 +132,32 @@ export class SalesService {
       `)
       .eq('branch_id', branchId)
       .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  }
+
+  async getSalesWithDiscounts(branchId: string, date: string): Promise<SalesWithDiscounts> {
+    const { data, error } = await supabase.rpc('get_sales_with_discounts', {
+      branch_id_param: branchId,
+      sale_date_param: date
+    });
+
+    if (error) throw error;
+    return data || {
+      total_sales: 0,
+      total_discounts: 0,
+      net_sales: 0,
+      number_of_sales: 0,
+      sales_with_discounts: 0
+    };
+  }
+
+  async getMixedPaymentBreakdown(branchId: string, date: string): Promise<MixedPaymentBreakdown[]> {
+    const { data, error } = await supabase.rpc('get_mixed_payment_breakdown', {
+      branch_id_param: branchId,
+      sale_date_param: date
+    });
 
     if (error) throw error;
     return data || [];

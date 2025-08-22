@@ -47,11 +47,18 @@ export interface Stock {
 }
 
 export interface Sale {
-  payment_type: string;
+  payment_type: 'EFECTIVO' | 'QR' | 'TARJETA' | 'MIXTO';
   id: string;
   user_id: string;
   branch_id: string;
   total: number;
+  subtotal?: number;
+  discount_amount?: number;
+  payment_details?: {
+    efectivo?: number;
+    qr?: number;
+    tarjeta?: number;
+  };
   sale_date: string;
   created_at: string;
   sale_items?: SaleItem[];
@@ -100,4 +107,18 @@ export interface DailyReport {
     quantity: number;
     total: number;
   }>;
+}
+
+export interface MixedPaymentBreakdown {
+  payment_method: string;
+  total_amount: number;
+  transaction_count: number;
+}
+
+export interface SalesWithDiscounts {
+  total_sales: number;
+  total_discounts: number;
+  net_sales: number;
+  number_of_sales: number;
+  sales_with_discounts: number;
 }

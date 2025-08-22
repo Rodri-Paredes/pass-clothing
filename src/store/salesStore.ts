@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Sale, DashboardStats } from '../lib/types';
+import type { Sale, DashboardStats, MixedPaymentBreakdown, SalesWithDiscounts } from '../lib/types';
 import { salesService } from '../services/salesService';
 
 interface SalesState {
@@ -13,8 +13,16 @@ interface SalesState {
     items: Array<{ variantId: string; quantity: number; unitPrice: number }>,
     branchId: string,
     userId: string,
-    paymentType: 'QR' | 'EFECTIVO' | 'TARJETA'
+    paymentType: 'QR' | 'EFECTIVO' | 'TARJETA' | 'MIXTO',
+    discountAmount?: number,
+    paymentDetails?: {
+      efectivo?: number;
+      qr?: number;
+      tarjeta?: number;
+    }
   ) => Promise<Sale>;
+  getSalesWithDiscounts: (branchId: string, date: string) => Promise<SalesWithDiscounts>;
+  getMixedPaymentBreakdown: (branchId: string, date: string) => Promise<MixedPaymentBreakdown[]>;
 }
 
 export const useSalesStore = create<SalesState>((set, get) => ({
@@ -44,11 +52,19 @@ export const useSalesStore = create<SalesState>((set, get) => ({
     }
   },
 
-  createSale: async (items, branchId, userId, paymentType) => {
-    const sale = await salesService.createSale(items, branchId, userId, paymentType);
+  createSale: async (items, branchId, userId, paymentType, discountAmount = 0, paymentDetails) => {
+    const sale = await salesService.createSale(items, branchId, userId, paymentType, discountAmount, paymentDetails);
     set(state => ({
       sales: [sale, ...state.sales]
     }));
     return sale;
+  },
+
+  getSalesWithDiscounts: async (branchId: string, date: string) => {
+    return await salesService.getSalesWithDiscounts(branchId, date);
+  },
+
+  getMixedPaymentBreakdown: async (branchId: string, date: string) => {
+    return await salesService.getMixedPaymentBreakdown(branchId, date);
   }
 }));

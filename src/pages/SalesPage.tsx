@@ -26,8 +26,15 @@ const SalesPage: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [isProcessingSale, setIsProcessingSale] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [paymentType, setPaymentType] = useState<'QR' | 'EFECTIVO' | 'TARJETA'>('EFECTIVO');
+  const [paymentType, setPaymentType] = useState<'QR' | 'EFECTIVO' | 'TARJETA' | 'MIXTO'>('EFECTIVO');
   const [selectedSale, setSelectedSale] = useState<any | null>(null);
+  const [discountAmount, setDiscountAmount] = useState<number>(0);
+  const [showMixedPaymentModal, setShowMixedPaymentModal] = useState(false);
+  const [mixedPaymentDetails, setMixedPaymentDetails] = useState({
+    efectivo: 0,
+    qr: 0,
+    tarjeta: 0
+  });
 
   useEffect(() => {
     if (activeBranch) {
@@ -108,6 +115,11 @@ const SalesPage: React.FC = () => {
   };
 
   const getTotalAmount = () => {
+    const subtotal = cart.reduce((total, item) => total + (item.quantity * item.product.price), 0);
+    return Math.max(0, subtotal - discountAmount);
+  };
+
+  const getSubtotal = () => {
     return cart.reduce((total, item) => total + (item.quantity * item.product.price), 0);
   };
 
@@ -122,9 +134,16 @@ const SalesPage: React.FC = () => {
         unitPrice: item.product.price
       }));
 
-      // Pass paymentType to createSale
-      await createSale(items, activeBranch.id, user.id, paymentType);
+      let paymentDetails = undefined;
+      if (paymentType === 'MIXTO') {
+        paymentDetails = mixedPaymentDetails;
+      }
+
+      // Pass paymentType, discountAmount, and paymentDetails to createSale
+      await createSale(items, activeBranch.id, user.id, paymentType, discountAmount, paymentDetails);
       setCart([]);
+      setDiscountAmount(0);
+      setMixedPaymentDetails({ efectivo: 0, qr: 0, tarjeta: 0 });
       // Recargar stock después de la venta
       if (activeBranch) {
         loadStockByBranch(activeBranch.id);
@@ -314,62 +333,186 @@ const SalesPage: React.FC = () => {
                   </div>
 
                   <div className="border-t border-gray-200 pt-4">
+                    {/* Sección de descuentos */}
+                    <div className="mb-6">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-base font-semibold text-gray-700">Descuento:</span>
+                        <span className="text-xs text-gray-400">(Opcional)</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-600">Bs.</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={discountAmount}
+                          onChange={(e) => setDiscountAmount(Math.max(0, parseFloat(e.target.value) || 0))}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="0.00"
+                        />
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setDiscountAmount(0)}
+                          disabled={discountAmount === 0}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          Limpiar
+                        </Button>
+                      </div>
+                    </div>
+
                     {/* Selector de tipo de pago mejorado */}
                     <div className="mb-6">
                       <div className="flex items-center gap-3 mb-2">
                         <span className="text-base font-semibold text-gray-700">Selecciona el tipo de pago:</span>
                         <span className="text-xs text-gray-400">(Obligatorio)</span>
                       </div>
-                      <div className="flex gap-4">
+                      <div className="grid grid-cols-2 gap-3">
                         <button
                           type="button"
-                          className={`flex-1 flex flex-col items-center justify-center p-3 rounded-lg border-2 transition-all shadow-sm cursor-pointer
+                          className={`flex flex-col items-center justify-center p-3 rounded-lg border-2 transition-all shadow-sm cursor-pointer
                             ${paymentType === 'EFECTIVO' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-white'} hover:border-green-400`}
                           onClick={() => setPaymentType('EFECTIVO')}
                         >
-                          <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="text-green-600 mb-1">
+                          <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="text-green-600 mb-1">
                             <rect x="3" y="7" width="18" height="10" rx="2" strokeWidth="2" />
                             <circle cx="12" cy="12" r="2" strokeWidth="2" />
                           </svg>
-                          <span className="font-semibold text-green-700">Efectivo</span>
+                          <span className="font-semibold text-green-700 text-sm">Efectivo</span>
                         </button>
                         <button
                           type="button"
-                          className={`flex-1 flex flex-col items-center justify-center p-3 rounded-lg border-2 transition-all shadow-sm cursor-pointer
+                          className={`flex flex-col items-center justify-center p-3 rounded-lg border-2 transition-all shadow-sm cursor-pointer
                             ${paymentType === 'QR' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 bg-white'} hover:border-indigo-400`}
                           onClick={() => setPaymentType('QR')}
                         >
-                          <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="text-indigo-600 mb-1">
+                          <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="text-indigo-600 mb-1">
                             <rect x="4" y="4" width="16" height="16" rx="2" strokeWidth="2" />
                             <path d="M8 8h.01M16 8h.01M8 16h.01M16 16h.01" strokeWidth="2" />
                           </svg>
-                          <span className="font-semibold text-indigo-700">QR</span>
+                          <span className="font-semibold text-indigo-700 text-sm">QR</span>
                         </button>
                         <button
                           type="button"
-                          className={`flex-1 flex flex-col items-center justify-center p-3 rounded-lg border-2 transition-all shadow-sm cursor-pointer
+                          className={`flex flex-col items-center justify-center p-3 rounded-lg border-2 transition-all shadow-sm cursor-pointer
                             ${paymentType === 'TARJETA' ? 'border-pink-500 bg-pink-50' : 'border-gray-200 bg-white'} hover:border-pink-400`}
                           onClick={() => setPaymentType('TARJETA')}
                         >
-                          <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="text-pink-600 mb-1">
+                          <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="text-pink-600 mb-1">
                             <rect x="2" y="6" width="20" height="12" rx="2" strokeWidth="2" />
                             <rect x="6" y="10" width="12" height="2" rx="1" strokeWidth="2" />
                           </svg>
-                          <span className="font-semibold text-pink-700">Tarjeta</span>
+                          <span className="font-semibold text-pink-700 text-sm">Tarjeta</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`flex flex-col items-center justify-center p-3 rounded-lg border-2 transition-all shadow-sm cursor-pointer
+                            ${paymentType === 'MIXTO' ? 'border-purple-500 bg-purple-50' : 'border-gray-200 bg-white'} hover:border-purple-400`}
+                          onClick={() => setPaymentType('MIXTO')}
+                        >
+                          <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="text-purple-600 mb-1">
+                            <path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" strokeWidth="2" />
+                          </svg>
+                          <span className="font-semibold text-purple-700 text-sm">Mixto</span>
                         </button>
                       </div>
                     </div>
+
+                    {/* Configuración de pago mixto */}
+                    {paymentType === 'MIXTO' && (
+                      <div className="mb-6 p-4 bg-purple-50 rounded-lg border border-purple-200">
+                        <h4 className="font-semibold text-purple-800 mb-3">Configurar Pago Mixto</h4>
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-purple-700 w-16">Efectivo:</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={mixedPaymentDetails.efectivo}
+                              onChange={(e) => setMixedPaymentDetails(prev => ({
+                                ...prev,
+                                efectivo: Math.max(0, parseFloat(e.target.value) || 0)
+                              }))}
+                              className="flex-1 px-2 py-1 border border-purple-300 rounded text-sm focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+                              placeholder="0.00"
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-purple-700 w-16">QR:</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={mixedPaymentDetails.qr}
+                              onChange={(e) => setMixedPaymentDetails(prev => ({
+                                ...prev,
+                                qr: Math.max(0, parseFloat(e.target.value) || 0)
+                              }))}
+                              className="flex-1 px-2 py-1 border border-purple-300 rounded text-sm focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+                              placeholder="0.00"
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-purple-700 w-16">Tarjeta:</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={mixedPaymentDetails.tarjeta}
+                              onChange={(e) => setMixedPaymentDetails(prev => ({
+                                ...prev,
+                                tarjeta: Math.max(0, parseFloat(e.target.value) || 0)
+                              }))}
+                              className="flex-1 px-2 py-1 border border-purple-300 rounded text-sm focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+                              placeholder="0.00"
+                            />
+                          </div>
+                          <div className="pt-2 border-t border-purple-200">
+                            <div className="flex justify-between text-sm">
+                              <span className="font-medium text-purple-700">Total ingresado:</span>
+                              <span className="font-bold text-purple-800">
+                                Bs. {(mixedPaymentDetails.efectivo + mixedPaymentDetails.qr + mixedPaymentDetails.tarjeta).toFixed(2)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="font-medium text-purple-700">Total a pagar:</span>
+                              <span className="font-bold text-purple-800">Bs. {getTotalAmount().toFixed(2)}</span>
+                            </div>
+                            {(mixedPaymentDetails.efectivo + mixedPaymentDetails.qr + mixedPaymentDetails.tarjeta) !== getTotalAmount() && (
+                              <div className="text-xs text-red-600 mt-1">
+                                ⚠️ Los montos deben sumar exactamente el total a pagar
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Total y acciones */}
                     <div className="flex flex-col gap-4">
-                      <div className="flex items-center justify-between bg-gradient-to-r from-blue-100 to-indigo-100 rounded-lg px-4 py-3 mb-2">
-                        <span className="text-lg font-bold text-gray-900">Total a pagar:</span>
-                        <span className="text-3xl font-extrabold text-blue-700 drop-shadow">${getTotalAmount().toFixed(2)}</span>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm text-gray-600">
+                          <span>Subtotal:</span>
+                          <span>Bs. {getSubtotal().toFixed(2)}</span>
+                        </div>
+                        {discountAmount > 0 && (
+                          <div className="flex justify-between text-sm text-green-600">
+                            <span>Descuento:</span>
+                            <span>- Bs. {discountAmount.toFixed(2)}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between bg-gradient-to-r from-blue-100 to-indigo-100 rounded-lg px-4 py-3">
+                          <span className="text-lg font-bold text-gray-900">Total a pagar:</span>
+                          <span className="text-3xl font-extrabold text-blue-700 drop-shadow">Bs. {getTotalAmount().toFixed(2)}</span>
+                        </div>
                       </div>
                       <Button
                         onClick={handleProcessSale}
                         isLoading={isProcessingSale}
                         className="w-full bg-gradient-to-r from-green-500 to-blue-600 hover:from-green-600 hover:to-blue-700 shadow-xl text-lg font-bold py-3 text-white border-none"
-                        disabled={cart.length === 0}
+                        disabled={cart.length === 0 || (paymentType === 'MIXTO' && (mixedPaymentDetails.efectivo + mixedPaymentDetails.qr + mixedPaymentDetails.tarjeta) !== getTotalAmount())}
                       >
                         <span className="flex items-center gap-2 justify-center">
                           <CheckCircle className="h-6 w-6" /> Procesar Venta
@@ -377,13 +520,15 @@ const SalesPage: React.FC = () => {
                       </Button>
                       <Button
                         variant="ghost"
-                        onClick={() => setCart([])}
+                        onClick={() => {
+                          setCart([]);
+                          setDiscountAmount(0);
+                          setMixedPaymentDetails({ efectivo: 0, qr: 0, tarjeta: 0 });
+                        }}
                         className="w-full border border-gray-200 text-gray-700"
                         disabled={cart.length === 0}
                       >
                         Limpiar Carrito
-
-
                       </Button>
                     </div>
                   </div>
