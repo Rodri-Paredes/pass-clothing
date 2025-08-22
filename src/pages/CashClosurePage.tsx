@@ -35,6 +35,10 @@ const CashClosurePage: React.FC = () => {
   const [mixedPaymentBreakdown, setMixedPaymentBreakdown] = useState<any[]>([]);
   const [selectedSale, setSelectedSale] = useState<any | null>(null);
   const [showSaleDetails, setShowSaleDetails] = useState(false);
+  const [showSalesList, setShowSalesList] = useState(false);
+  const [showUnitsList, setShowUnitsList] = useState(false);
+  const [salesList, setSalesList] = useState<any[]>([]);
+  const [unitsList, setUnitsList] = useState<any[]>([]);
 
   useEffect(() => {
     if (activeBranch && selectedDate) {
@@ -93,24 +97,64 @@ const loadTotals = async () => {
     });
     setProductsSold(prodSold ?? 0);
 
-    // Cargar información de descuentos
-    const { data: discountData } = await supabase.rpc('get_sales_with_discounts', {
-      branch_id_param: activeBranch.id,
-      sale_date_param: selectedDate,
-    });
-    
-    if (discountData) {
-      setTotalDiscounts(discountData.total_discounts || 0);
-      setSalesWithDiscounts(discountData.sales_with_discounts || 0);
+    // Cargar información de descuentos - usando consulta directa en lugar de RPC
+    try {
+      const { data: discountData } = await supabase
+        .from('sales')
+        .select('discount_amount')
+        .eq('branch_id', activeBranch.id)
+        .gte('sale_date', `${selectedDate}T00:00:00`)
+        .lte('sale_date', `${selectedDate}T23:59:59`)
+        .not('discount_amount', 'is', null);
+
+      if (discountData) {
+        const totalDiscounts = discountData.reduce((sum, sale) => sum + (sale.discount_amount || 0), 0);
+        const salesWithDiscounts = discountData.length;
+        setTotalDiscounts(totalDiscounts);
+        setSalesWithDiscounts(salesWithDiscounts);
+      }
+    } catch (error) {
+      console.log('Descuentos no disponibles:', error);
+      setTotalDiscounts(0);
+      setSalesWithDiscounts(0);
     }
 
-    // Cargar desglose de pagos mixtos
-    const { data: mixedData } = await supabase.rpc('get_mixed_payment_breakdown', {
-      branch_id_param: activeBranch.id,
-      sale_date_param: selectedDate,
-    });
-    
-    setMixedPaymentBreakdown(mixedData || []);
+    // Cargar desglose de pagos mixtos - usando consulta directa en lugar de RPC
+    try {
+      const { data: mixedData } = await supabase
+        .from('sales')
+        .select('payment_type, payment_details, total')
+        .eq('branch_id', activeBranch.id)
+        .eq('payment_type', 'MIXTO')
+        .gte('sale_date', `${selectedDate}T00:00:00`)
+        .lte('sale_date', `${selectedDate}T23:59:59`);
+
+      if (mixedData && mixedData.length > 0) {
+        const breakdown: any[] = [];
+        const methods = ['efectivo', 'qr', 'tarjeta'];
+        
+        methods.forEach(method => {
+          const total = mixedData.reduce((sum, sale) => {
+            return sum + (sale.payment_details?.[method] || 0);
+          }, 0);
+          
+          if (total > 0) {
+            breakdown.push({
+              payment_method: method,
+              total_amount: total,
+              transaction_count: mixedData.length
+            });
+          }
+        });
+        
+        setMixedPaymentBreakdown(breakdown);
+      } else {
+        setMixedPaymentBreakdown([]);
+      }
+    } catch (error) {
+      console.log('Pagos mixtos no disponibles:', error);
+      setMixedPaymentBreakdown([]);
+    }
 
   } catch (error) {
     console.error('Error loading payment totals:', error);
@@ -237,6 +281,89 @@ const loadTotals = async () => {
     }
     
     return `${productNames[0]} +${productNames.length - 1} más`;
+  };
+
+  const handleSalesCardClick = async () => {
+    if (!activeBranch) return;
+    
+    try {
+      const { data: sales, error } = await supabase
+        .from('sales')
+        .select(`
+          *,
+          sale_items (
+            *,
+            variant:product_variants (
+              *,
+              product:products (name)
+            )
+          ),
+          user:users (name)
+        `)
+        .eq('branch_id', activeBranch.id)
+        .gte('sale_date', `${selectedDate}T00:00:00`)
+        .lte('sale_date', `${selectedDate}T23:59:59`)
+        .order('sale_date', { ascending: false });
+
+      if (error) throw error;
+      
+      setSalesList(sales || []);
+      setShowSalesList(true);
+    } catch (error) {
+      console.error('Error loading sales list:', error);
+    }
+  };
+
+  const handleUnitsCardClick = async () => {
+    if (!activeBranch) return;
+    
+    try {
+      // Primero obtener las ventas del día
+      const { data: sales, error: salesError } = await supabase
+        .from('sales')
+        .select('id, sale_date, user:users(name)')
+        .eq('branch_id', activeBranch.id)
+        .gte('sale_date', `${selectedDate}T00:00:00`)
+        .lte('sale_date', `${selectedDate}T23:59:59`)
+        .order('sale_date', { ascending: false });
+
+      if (salesError) throw salesError;
+
+      if (sales && sales.length > 0) {
+        const saleIds = sales.map(sale => sale.id);
+        
+        // Luego obtener los items de esas ventas
+        const { data: units, error: unitsError } = await supabase
+          .from('sale_items')
+          .select(`
+            *,
+            variant:product_variants (
+              *,
+              product:products (name, image_url)
+            )
+          `)
+          .in('sale_id', saleIds);
+
+        if (unitsError) throw unitsError;
+
+        // Combinar la información
+        const unitsWithSaleInfo = units?.map(unit => {
+          const sale = sales.find(s => s.id === unit.sale_id);
+          return {
+            ...unit,
+            sale: sale || null
+          };
+        }) || [];
+
+        setUnitsList(unitsWithSaleInfo);
+        setShowUnitsList(true);
+      } else {
+        setUnitsList([]);
+        setShowUnitsList(true);
+      }
+    } catch (error) {
+      console.error('Error loading units list:', error);
+    }
   };
 
   if (!activeBranch) {
@@ -383,7 +510,10 @@ const loadTotals = async () => {
           </div>
 
           {/* Número de Ventas */}
-          <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-3 sm:p-4 text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+          <div 
+            className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-3 sm:p-4 text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer"
+            onClick={handleSalesCardClick}
+          >
             <div className="flex items-center justify-between mb-2">
               <div className="w-8 h-8 sm:w-9 sm:h-9 bg-white/20 rounded-lg flex items-center justify-center">
                 <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5" />
@@ -397,7 +527,10 @@ const loadTotals = async () => {
           </div>
 
           {/* Productos Vendidos */}
-          <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-3 sm:p-4 text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+          <div 
+            className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-3 sm:p-4 text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer"
+            onClick={handleUnitsCardClick}
+          >
             <div className="flex items-center justify-between mb-2">
               <div className="w-8 h-8 sm:w-9 sm:h-9 bg-white/20 rounded-lg flex items-center justify-center">
                 <FileText className="h-4 w-4 sm:h-5 sm:w-5" />
@@ -768,6 +901,196 @@ const loadTotals = async () => {
               <div className="flex justify-end gap-3">
                 <Button
                   onClick={() => setShowSaleDetails(false)}
+                  variant="secondary"
+                  className="px-6 py-2"
+                >
+                  Cerrar
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Lista de Ventas */}
+      {showSalesList && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg flex items-center justify-center">
+                    <ShoppingCart className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900">Lista de Ventas</h3>
+                    <p className="text-sm text-gray-600">
+                      {formatDate(selectedDate)} - {numberOfSales} ventas registradas
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowSalesList(false)}
+                  className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center hover:bg-gray-200 transition-colors"
+                >
+                  <span className="text-gray-600 text-xl">×</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              {salesList.length > 0 ? (
+                <div className="space-y-4">
+                  {salesList.map((sale) => (
+                    <div 
+                      key={sale.id} 
+                      className="p-4 bg-gray-50 rounded-lg border border-gray-200 hover:shadow-md transition-all duration-300 cursor-pointer"
+                      onClick={() => {
+                        setSelectedSale(sale);
+                        setShowSaleDetails(true);
+                        setShowSalesList(false);
+                      }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-4 mb-2">
+                            <span className="text-sm font-medium text-gray-600">
+                              {new Date(sale.sale_date).toLocaleTimeString('es-ES', {
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                            <span className="text-sm font-medium text-purple-600">
+                              #{sale.id.slice(-8)}
+                            </span>
+                            <span className="text-sm text-gray-600">
+                              {sale.user?.name || 'N/A'}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-600">
+                              {getProductNames(sale)}
+                            </span>
+                            <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs font-medium">
+                              {sale.sale_items?.length || 0} items
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-gray-900">{formatCurrency(sale.total)}</p>
+                          <p className="text-xs text-gray-600 capitalize">{sale.payment_type}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <ShoppingCart className="h-8 w-8 text-gray-400" />
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No hay ventas registradas</h3>
+                  <p className="text-gray-600">No se encontraron ventas para {formatDate(selectedDate)}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-gray-200 bg-gray-50">
+              <div className="flex justify-end gap-3">
+                <Button
+                  onClick={() => setShowSalesList(false)}
+                  variant="secondary"
+                  className="px-6 py-2"
+                >
+                  Cerrar
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Lista de Unidades */}
+      {showUnitsList && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg flex items-center justify-center">
+                    <FileText className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900">Lista de Unidades Vendidas</h3>
+                    <p className="text-sm text-gray-600">
+                      {formatDate(selectedDate)} - {productsSold} unidades vendidas
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowUnitsList(false)}
+                  className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center hover:bg-gray-200 transition-colors"
+                >
+                  <span className="text-gray-600 text-xl">×</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              {unitsList.length > 0 ? (
+                <div className="space-y-4">
+                  {unitsList.map((item, index) => (
+                    <div key={index} className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200 hover:shadow-md transition-all duration-300">
+                      {item.variant?.product?.image_url && (
+                        <img 
+                          src={item.variant.product.image_url} 
+                          alt={item.variant.product.name}
+                          className="w-12 h-12 object-cover rounded-lg"
+                        />
+                      )}
+                      <div className="flex-1">
+                        <h5 className="font-medium text-gray-900">
+                          {item.variant?.product?.name || 'Producto desconocido'}
+                        </h5>
+                        <div className="flex items-center gap-4 text-sm text-gray-600 mt-1">
+                          <span>Talla: {item.variant?.size || 'N/A'}</span>
+                          <span>Cantidad: {item.quantity}</span>
+                          <span>Precio: {formatCurrency(item.unit_price)}</span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-xs text-gray-500">
+                            Venta: {new Date(item.sale?.sale_date).toLocaleTimeString('es-ES', {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            Vendedor: {item.sale?.user?.name || 'N/A'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-semibold text-gray-900">{formatCurrency(item.subtotal)}</p>
+                        <p className="text-xs text-gray-600">Subtotal</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <FileText className="h-8 w-8 text-gray-400" />
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No hay unidades vendidas</h3>
+                  <p className="text-gray-600">No se encontraron productos vendidos para {formatDate(selectedDate)}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-gray-200 bg-gray-50">
+              <div className="flex justify-end gap-3">
+                <Button
+                  onClick={() => setShowUnitsList(false)}
                   variant="secondary"
                   className="px-6 py-2"
                 >
