@@ -8,7 +8,8 @@ import {
   Users, 
   Settings,
   Store,
-  X
+  X,
+  Database
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 
@@ -25,6 +26,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
     { name: 'Ventas', href: '/sales', icon: ShoppingCart },
     { name: 'Cierre de Caja', href: '/cash-closure', icon: BarChart3 },
     { name: 'Reportes', href: '/reports', icon: BarChart3 },
+    { name: 'Diagnóstico', href: '/diagnostic', icon: Database },
     ...(user?.role === 'admin' ? [
       { name: 'Usuarios', href: '/users', icon: Users },
       { name: 'Configuración', href: '/settings', icon: Settings }

@@ -10,6 +10,22 @@ export class SalesService {
   ): Promise<Sale> {
     const total = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
 
+    // Verificar stock antes de crear la venta
+    for (const item of items) {
+      const { data: currentStock, error: stockError } = await supabase
+        .from('stock')
+        .select('quantity')
+        .eq('variant_id', item.variantId)
+        .eq('branch_id', branchId)
+        .single();
+
+      if (stockError) throw stockError;
+      if (!currentStock || currentStock.quantity < item.quantity) {
+        throw new Error(`Stock insuficiente para el producto`);
+      }
+    }
+
+    // Crear la venta
     const { data: sale, error: saleError } = await supabase
       .from('sales')
       .insert({
@@ -24,6 +40,7 @@ export class SalesService {
 
     if (saleError) throw saleError;
 
+    // Crear los items de la venta
     const saleItems = items.map(item => ({
       sale_id: sale.id,
       variant_id: item.variantId,
@@ -38,6 +55,7 @@ export class SalesService {
 
     if (itemsError) throw itemsError;
 
+    // Actualizar stock después de crear la venta
     for (const item of items) {
       await this.updateStockAfterSale(item.variantId, branchId, item.quantity);
     }
@@ -46,6 +64,7 @@ export class SalesService {
   }
 
   private async updateStockAfterSale(variantId: string, branchId: string, soldQuantity: number): Promise<void> {
+    // Usar una consulta más robusta para actualizar el stock
     const { data: currentStock, error: stockError } = await supabase
       .from('stock')
       .select('quantity')
@@ -53,7 +72,14 @@ export class SalesService {
       .eq('branch_id', branchId)
       .single();
 
-    if (stockError) throw stockError;
+    if (stockError) {
+      console.error('Error getting stock:', stockError);
+      throw new Error('Error al obtener el stock del producto');
+    }
+
+    if (!currentStock) {
+      throw new Error('No se encontró stock para este producto en esta sucursal');
+    }
 
     const newQuantity = Math.max(0, currentStock.quantity - soldQuantity);
 
@@ -64,9 +90,13 @@ export class SalesService {
         updated_at: new Date().toISOString()
       })
       .eq('variant_id', variantId)
-      .eq('branch_id', branchId);
+      .eq('branch_id', branchId)
+      .gte('quantity', soldQuantity); // Solo actualizar si hay suficiente stock
 
-    if (updateError) throw updateError;
+    if (updateError) {
+      console.error('Error updating stock:', updateError);
+      throw new Error('Error al actualizar el stock del producto');
+    }
   }
 
   async getSalesByBranch(branchId: string): Promise<Sale[]> {
@@ -167,18 +197,16 @@ export class SalesService {
     return {
       monthlyTotal,
       totalSales: totalSales || 0,
-      topProduct: (Array.isArray(topProductData) && topProductData.length > 0 && topProductData[0].variant?.product?.name)
+      topProduct: (Array.isArray(topProductData) && topProductData.length > 0 && topProductData[0].variant?.[0]?.product?.[0]?.name)
         ? {
-            name: topProductData[0].variant.product.name,
+            name: topProductData[0].variant[0].product[0].name,
             total_sold: topProductData[0].quantity
           }
         : undefined,
       lowStockProducts: Array.isArray(lowStockData)
         ? lowStockData.map(item => ({
-            name: (item.variant?.product?.name)
-              ? String(item.variant.product.name)
-              : '',
-            quantity: typeof item.quantity === 'number' ? item.quantity : Number(item.quantity)
+            name: item.variant?.[0]?.product?.[0]?.name as string || '',
+            quantity: item.quantity as number
           }))
         : [],
       dailySales

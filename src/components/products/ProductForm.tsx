@@ -12,6 +12,7 @@ interface ProductFormData {
   category: string;
   price: number;
   variants: Array<{
+    id?: string; // ID opcional para variantes existentes
     size: string;
     stock: { [branchId: string]: number };
   }>;
@@ -28,7 +29,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>('');
-  const [variants, setVariants] = useState<Array<{ size: string; stock: { [branchId: string]: number } }>>([
+  const [variants, setVariants] = useState<Array<{ id?: string; size: string; stock: { [branchId: string]: number } }>>([
     { size: '', stock: branches.reduce((acc, branch) => { acc[branch.id] = 0; return acc; }, {} as { [branchId: string]: number }) }
   ]);
 
@@ -68,6 +69,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
               }, {});
               
               return {
+                id: variant.id, // Agregar el ID de la variante existente
                 size: variant.size,
                 stock
               };
@@ -142,7 +144,19 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
         let variantObj;
         
         // Check if this variant already exists (for editing)
-        if (product && product.variants) {
+        if (product && product.variants && variant.id) {
+          // Es una variante existente, usarla directamente
+          variantObj = product.variants.find((v: any) => v.id === variant.id);
+          if (!variantObj) {
+            console.log('Creating new variant for existing product:', { product_id: savedProduct.id, size: variant.size });
+            variantObj = await createProductVariant({
+              product_id: savedProduct.id,
+              size: variant.size
+            });
+            console.log('Variant created:', variantObj);
+          }
+        } else if (product && product.variants) {
+          // Buscar si existe una variante con el mismo tamaño
           const existingVariant = product.variants.find((v: any) => v.size === variant.size);
           if (existingVariant) {
             variantObj = existingVariant;
@@ -163,6 +177,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
           console.log('Variant created (new product):', variantObj);
         }
         
+        // Actualizar stock para todas las sucursales
         for (const [branchId, quantity] of Object.entries(variant.stock)) {
           await updateStock(variantObj.id, branchId, quantity);
         }

@@ -132,7 +132,7 @@ const SalesForm: React.FC<SalesFormProps> = ({ onClose }) => {
     setIsLoading(true);
     try {
       const items = saleItems.map(item => ({
-        productId: item.productId,
+        variantId: item.variantId,
         quantity: item.quantity,
         unitPrice: item.unitPrice
       }));
