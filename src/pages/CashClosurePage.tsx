@@ -407,49 +407,49 @@ const loadTotals = async () => {
                   <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
                     <BarChart3 className="h-6 w-6 text-white" />
                   </div>
-                  <div>
+        <div>
                     <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Cierre de Caja</h1>
                     <p className="text-gray-600 font-medium">{activeBranch.name}</p>
                   </div>
                 </div>
                 <p className="text-sm text-gray-500 mt-2">
                   Reporte detallado de ventas y transacciones del día
-                </p>
-              </div>
-              
+          </p>
+        </div>
+        
               <div className="flex flex-col sm:flex-row gap-4">
                 <div className="relative">
-                  <Input
-                    type="date"
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
+          <Input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
                     className="w-full sm:w-auto min-w-[200px] bg-gray-50 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
-                  />
+          />
                 </div>
                 <div className="flex gap-3">
-                  <Button
-                    onClick={handlePrintReport}
-                    disabled={!dailyReport}
-                    variant="secondary"
+            <Button
+              onClick={handlePrintReport}
+              disabled={!dailyReport}
+              variant="secondary"
                     className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700"
-                  >
-                    <Printer className="h-4 w-4" />
+            >
+              <Printer className="h-4 w-4" />
                     <span className="hidden sm:inline">Imprimir</span>
-                  </Button>
-                  <Button
-                    onClick={handleDownloadReport}
-                    disabled={!dailyReport}
-                    isLoading={isGeneratingReport}
+            </Button>
+            <Button
+              onClick={handleDownloadReport}
+              disabled={!dailyReport}
+              isLoading={isGeneratingReport}
                     className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white"
-                  >
-                    <Download className="h-4 w-4" />
+            >
+              <Download className="h-4 w-4" />
                     <span className="hidden sm:inline">Descargar</span>
-                  </Button>
+            </Button>
                 </div>
               </div>
-            </div>
           </div>
         </div>
+      </div>
 
         {/* Dashboard Cards - Diseño Compacto y Mejorado */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-8 gap-3 sm:gap-4 mb-8">
@@ -458,28 +458,28 @@ const loadTotals = async () => {
             <div className="flex items-center justify-between mb-2">
               <div className="w-8 h-8 sm:w-9 sm:h-9 bg-white/20 rounded-lg flex items-center justify-center">
                 <DollarSign className="h-4 w-4 sm:h-5 sm:w-5" />
-              </div>
+            </div>
               <span className="text-xs font-medium bg-white/20 px-1.5 py-0.5 rounded-full">Total</span>
             </div>
             <div className="space-y-0.5">
               <p className="text-xs sm:text-sm font-medium text-blue-100">Ventas</p>
               <p className="text-lg sm:text-xl font-bold leading-tight">{formatCurrency(totalSales)}</p>
             </div>
-          </div>
+            </div>
 
           {/* Ventas Efectivo */}
           <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-3 sm:p-4 text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
             <div className="flex items-center justify-between mb-2">
               <div className="w-8 h-8 sm:w-9 sm:h-9 bg-white/20 rounded-lg flex items-center justify-center">
                 <Wallet className="h-4 w-4 sm:h-5 sm:w-5" />
-              </div>
+            </div>
               <span className="text-xs font-medium bg-white/20 px-1.5 py-0.5 rounded-full">Efectivo</span>
             </div>
             <div className="space-y-0.5">
               <p className="text-xs sm:text-sm font-medium text-green-100">Ventas</p>
               <p className="text-lg sm:text-xl font-bold leading-tight">{formatCurrency(totalSalesCash)}</p>
-            </div>
-          </div>
+        </div>
+      </div>
 
           {/* Ventas QR */}
           <div className="bg-gradient-to-br from-cyan-500 to-indigo-600 rounded-xl p-3 sm:p-4 text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
@@ -678,15 +678,15 @@ const loadTotals = async () => {
                     </tbody>
                   </table>
                 </div>
-              ) : (
+                              ) : (
                 <div className="text-center py-12">
                   <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                     <ShoppingCart className="h-8 w-8 text-gray-400" />
                   </div>
                   <h3 className="text-lg font-medium text-gray-900 mb-2">No hay ventas registradas</h3>
                   <p className="text-gray-600">No se encontraron ventas para {formatDate(selectedDate)} en {activeBranch.name}</p>
-                </div>
-              )}
+                  </div>
+                )}
             </div>
 
             {/* Productos más vendidos - Mejorado */}
@@ -702,9 +702,9 @@ const loadTotals = async () => {
               </div>
               
               <div className="p-6 sm:p-8">
-                {dailyReport.topProducts.length > 0 ? (
+              {dailyReport.topProducts.length > 0 ? (
                   <div className="space-y-4">
-                    {dailyReport.topProducts.map((product, index) => (
+                  {dailyReport.topProducts.map((product, index) => (
                       <div key={index} className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl border border-gray-200 hover:shadow-md transition-all duration-300">
                         <div className="flex items-center space-x-4 min-w-0 flex-1">
                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm ${
@@ -713,29 +713,29 @@ const loadTotals = async () => {
                             index === 2 ? 'bg-gradient-to-br from-orange-400 to-orange-500' :
                             'bg-gradient-to-br from-blue-400 to-blue-500'
                           }`}>
-                            #{index + 1}
-                          </div>
+                          #{index + 1}
+                        </div>
                           <div className="min-w-0 flex-1">
                             <p className="font-semibold text-gray-900 truncate">{product.name}</p>
                             <p className="text-sm text-gray-600">{product.quantity} unidades vendidas</p>
-                          </div>
+                      </div>
                         </div>
                         <div className="text-right">
                           <p className="font-bold text-gray-900">{formatCurrency(product.total)}</p>
                           <p className="text-xs text-gray-600">Total</p>
-                        </div>
                       </div>
-                    ))}
-                  </div>
-                ) : (
+                    </div>
+                  ))}
+                </div>
+              ) : (
                   <div className="text-center py-8">
                     <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
                       <TrendingUp className="h-6 w-6 text-gray-400" />
                     </div>
                     <p className="text-gray-600">No hay datos de productos para mostrar</p>
                   </div>
-                )}
-              </div>
+              )}
+            </div>
             </div>
           </div>
         ) : (
@@ -1100,7 +1100,7 @@ const loadTotals = async () => {
             </div>
           </div>
         </div>
-      )}
+        )}
     </div>
   );
 };

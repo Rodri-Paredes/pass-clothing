@@ -122,3 +122,88 @@ export interface SalesWithDiscounts {
   number_of_sales: number;
   sales_with_discounts: number;
 }
+
+// Tipos para el sistema de flujo de caja
+export interface CashRegister {
+  id: string;
+  branch_id: string;
+  user_id: string;
+  status: 'ABIERTA' | 'CERRADA';
+  opening_date: string;
+  opening_amount: number;
+  opening_user_id: string;
+  opening_notes?: string;
+  closing_date?: string;
+  closing_amount?: number;
+  closing_user_id?: string;
+  closing_notes?: string;
+  expected_cash: number;
+  expected_qr: number;
+  expected_card: number;
+  expected_total: number;
+  cash_difference: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CashMovement {
+  id: string;
+  cash_register_id: string;
+  movement_type: 'INGRESO' | 'EGRESO';
+  payment_type: 'EFECTIVO' | 'QR' | 'TARJETA' | 'MIXTO';
+  amount: number;
+  description: string;
+  reference_id?: string;
+  reference_type?: string;
+  user_id: string;
+  created_at: string;
+}
+
+export interface CashRegisterSummary {
+  opening_amount: number;
+  expected_cash: number;
+  expected_qr: number;
+  expected_card: number;
+  expected_total: number;
+  closing_amount?: number;
+  cash_difference?: number;
+  total_sales: number;
+  total_movements: number;
+}
+
+export interface CashMovementWithUser {
+  id: string;
+  movement_type: 'INGRESO' | 'EGRESO';
+  payment_type: 'EFECTIVO' | 'QR' | 'TARJETA' | 'MIXTO';
+  amount: number;
+  description: string;
+  reference_id?: string;
+  reference_type?: string;
+  user_name: string;
+  created_at: string;
+}
+
+export interface OpenCashRegister {
+  id: string;
+  opening_date: string;
+  opening_amount: number;
+  opening_user_name: string;
+  opening_notes?: string;
+  expected_cash: number;
+  expected_qr: number;
+  expected_card: number;
+  expected_total: number;
+}
+
+export interface CashRegisterHistory {
+  id: string;
+  opening_date: string;
+  closing_date?: string;
+  opening_amount: number;
+  closing_amount?: number;
+  expected_total: number;
+  cash_difference?: number;
+  opening_user_name: string;
+  closing_user_name?: string;
+  status: 'ABIERTA' | 'CERRADA';
+}

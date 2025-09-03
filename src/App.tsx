@@ -7,10 +7,11 @@ import DashboardPage from './pages/DashboardPage';
 import ProductsPage from './pages/ProductsPage';
 import SalesPage from './pages/SalesPage';
 import Layout from './components/layout/Layout';
-import CashClouserPage from './pages/CashClosurePage';
+import CashClosurePage from './pages/CashClosurePage';
 import UsersPage from './pages/UsersPage';
 import SettingsPage from './pages/SettingsPage';
 import DiagnosticPage from './pages/DiagnosticPage';
+import CashFlowPage from './pages/CashFlowPage';
 
 function App() {
   const { user, activeBranch, isLoading, isAuthenticated, loadUser } = useAuthStore();
@@ -43,8 +44,9 @@ function App() {
         <Route path="/products" element={<ProductsPage />} />
         <Route path="/sales" element={<SalesPage />} />
         <Route path="/reports" element={<DashboardPage />} />
-        <Route path="/cash-closure" element={<CashClouserPage />} />
+        <Route path="/cash-closure" element={<CashClosurePage />} />
         <Route path="/diagnostic" element={<DiagnosticPage />} />
+        <Route path="/cash-flow" element={<CashFlowPage />} />
         {user?.role === 'admin' && (
           <>
             <Route path="/users" element={<UsersPage />} />

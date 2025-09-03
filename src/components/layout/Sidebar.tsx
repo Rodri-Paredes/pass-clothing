@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Package, 
@@ -9,7 +9,11 @@ import {
   Settings,
   Store,
   X,
-  Database
+  Database,
+  Home, 
+  LogOut,
+  Stethoscope,
+  DollarSign
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 
@@ -19,12 +23,24 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
   const { user, activeBranch } = useAuthStore();
+  const { pathname } = useLocation();
 
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Productos', href: '/products', icon: Package },
     { name: 'Ventas', href: '/sales', icon: ShoppingCart },
-    { name: 'Cierre de Caja', href: '/cash-closure', icon: BarChart3 },
+    {
+      name: 'Flujo de Caja',
+      href: '/cash-flow',
+      icon: DollarSign,
+      current: pathname === '/cash-flow'
+    },
+    {
+      name: 'Cierre de Caja',
+      href: '/cash-closure',
+      icon: BarChart3,
+      current: pathname === '/cash-closure'
+    },
     { name: 'Reportes', href: '/reports', icon: BarChart3 },
     { name: 'Diagnóstico', href: '/diagnostic', icon: Database },
     ...(user?.role === 'admin' ? [

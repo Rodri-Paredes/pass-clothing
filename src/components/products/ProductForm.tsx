@@ -100,8 +100,18 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
   };
 
   const handleStockChange = (variantIndex: number, branchId: string, quantity: number) => {
+    // Validaciones adicionales
+    if (quantity < 0) {
+      quantity = 0; // No permitir valores negativos
+    }
+    
+    // Limitar a un máximo razonable (ej: 999,999)
+    if (quantity > 999999) {
+      quantity = 999999;
+    }
+    
     setVariants(prev => prev.map((variant, i) =>
-      i === variantIndex ? { ...variant, stock: { ...variant.stock, [branchId]: Math.max(0, quantity) } } : variant
+      i === variantIndex ? { ...variant, stock: { ...variant.stock, [branchId]: quantity } } : variant
     ));
   };
 
@@ -116,6 +126,25 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
   const onSubmit = async (data: ProductFormData) => {
     setIsLoading(true);
     try {
+      // Validar que todas las variantes tengan talla
+      for (const variant of variants) {
+        if (!variant.size.trim()) {
+          throw new Error('Todas las variantes deben tener una talla');
+        }
+      }
+      
+      // Validar que el stock sea válido para todas las variantes
+      for (const variant of variants) {
+        for (const [branchId, quantity] of Object.entries(variant.stock)) {
+          if (quantity < 0) {
+            throw new Error(`El stock no puede ser negativo para la talla ${variant.size} en ${branches.find(b => b.id === branchId)?.name}`);
+          }
+          if (quantity > 999999) {
+            throw new Error(`El stock no puede ser mayor a 999,999 para la talla ${variant.size} en ${branches.find(b => b.id === branchId)?.name}`);
+          }
+        }
+      }
+      
       let imageUrl = product?.image_url || '';
       if (imageFile) {
         imageUrl = await uploadImage(imageFile);
@@ -178,9 +207,19 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
         }
         
         // Actualizar stock para todas las sucursales
+        console.log(`🔄 [ProductForm] Iniciando actualización de stock para variante: ${variant.size}`);
         for (const [branchId, quantity] of Object.entries(variant.stock)) {
-          await updateStock(variantObj.id, branchId, quantity);
+          console.log(`🔄 [ProductForm] Actualizando stock - Sucursal: ${branchId}, Cantidad: ${quantity}`);
+          try {
+            await updateStock(variantObj.id, branchId, quantity);
+            console.log(`✅ [ProductForm] Stock actualizado exitosamente - Sucursal: ${branchId}, Cantidad: ${quantity}`);
+          } catch (error) {
+            console.error(`❌ [ProductForm] Error actualizando stock - Sucursal: ${branchId}, Cantidad: ${quantity}:`, error);
+            const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+            throw new Error(`Error actualizando stock para sucursal ${branchId}: ${errorMessage}`);
+          }
         }
+        console.log(`✅ [ProductForm] Stock completado para variante: ${variant.size}`);
       }
       
       // Reload products to reflect changes
@@ -341,11 +380,30 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
                   <div key={branch.id} className="flex items-center gap-2">
                     <span className="text-xs font-medium text-gray-700">{branch.name}</span>
                     <input
-                      type="number"
-                      min="0"
-                      value={variant.stock[branch.id] || 0}
-                      onChange={e => handleStockChange(idx, branch.id, parseInt(e.target.value) || 0)}
-                      className="w-16 px-2 py-1 border border-gray-300 rounded text-center focus:border-blue-500 focus:outline-none"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={variant.stock[branch.id] || ''}
+                      onChange={e => {
+                        const value = e.target.value;
+                        // Solo permitir números
+                        if (value === '' || /^\d+$/.test(value)) {
+                          const numValue = value === '' ? 0 : parseInt(value);
+                          // Validar que no sea negativo
+                          if (numValue >= 0) {
+                            handleStockChange(idx, branch.id, numValue);
+                          }
+                        }
+                      }}
+                      onBlur={e => {
+                        // Asegurar que siempre tenga un valor válido al salir del campo
+                        const value = e.target.value;
+                        if (value === '' || parseInt(value) < 0) {
+                          handleStockChange(idx, branch.id, 0);
+                        }
+                      }}
+                      className="w-20 px-2 py-1 border border-gray-300 rounded text-center focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      placeholder="0"
                     />
                     <span className="text-xs text-gray-600">unidades</span>
                   </div>

@@ -16,6 +16,7 @@ interface ProductState {
   updateStock: (variantId: string, branchId: string, quantity: number) => Promise<void>;
   uploadImage: (file: File) => Promise<string>;
   getStockByProduct: (variantId: string) => Promise<Stock[]>;
+  verifyStockIntegrity: (variantId: string, expectedStock: { [branchId: string]: number }) => Promise<any>;
 }
 
 export const useProductStore = create<ProductState>((set, get) => ({
@@ -82,5 +83,9 @@ export const useProductStore = create<ProductState>((set, get) => ({
 
   getStockByProduct: async (variantId: string) => {
     return await productService.getStockByProduct(variantId);
+  },
+
+  verifyStockIntegrity: async (variantId: string, expectedStock: { [branchId: string]: number }) => {
+    return await productService.verifyStockIntegrity(variantId, expectedStock);
   }
 }));
