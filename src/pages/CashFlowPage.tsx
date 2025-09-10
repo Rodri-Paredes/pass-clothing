@@ -36,7 +36,7 @@ const CashFlowPage: React.FC = () => {
   
   // Estados principales
   const [openRegister, setOpenRegister] = useState<OpenCashRegister | null>(null);
-  const [movements, setMovements] = useState<CashMovementWithUser[]>([]);
+  const [movements, setMovements] = useState<any[]>([]);
   const [history, setHistory] = useState<CashRegisterHistory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState({
@@ -84,7 +84,7 @@ const CashFlowPage: React.FC = () => {
       
       if (statsData.hasOpenRegister && statsData.openRegister) {
         setOpenRegister(statsData.openRegister);
-        const movementsData = await cashRegisterService.getCashMovements(statsData.openRegister.id);
+        const movementsData = await cashRegisterService.getCashMovementsGrouped(statsData.openRegister.id);
         setMovements(movementsData);
       }
     } catch (error) {
@@ -473,12 +473,24 @@ const CashFlowPage: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-900">
                           {movement.description}
+                          {movement.is_grouped && (
+                            <div className="text-xs text-gray-500 mt-1">
+                              Venta con pago mixto
+                            </div>
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {movement.user_name}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 text-right">
-                          {formatCurrency(movement.amount)}
+                          {movement.is_grouped ? (
+                            <div>
+                              <div className="text-lg">{formatCurrency(movement.total_amount)}</div>
+                              <div className="text-xs text-gray-500">Total agrupado</div>
+                            </div>
+                          ) : (
+                            formatCurrency(movement.amount)
+                          )}
                         </td>
                       </tr>
                     ))}

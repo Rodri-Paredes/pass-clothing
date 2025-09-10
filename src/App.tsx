@@ -43,10 +43,10 @@ function App() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/products" element={<ProductsPage />} />
         <Route path="/sales" element={<SalesPage />} />
-        <Route path="/reports" element={<DashboardPage />} />
+        {/* <Route path="/reports" element={<DashboardPage />} /> */}
         <Route path="/cash-closure" element={<CashClosurePage />} />
-        <Route path="/diagnostic" element={<DiagnosticPage />} />
-        <Route path="/cash-flow" element={<CashFlowPage />} />
+        {/* <Route path="/diagnostic" element={<DiagnosticPage />} />
+        <Route path="/cash-flow" element={<CashFlowPage />} /> */}
         {user?.role === 'admin' && (
           <>
             <Route path="/users" element={<UsersPage />} />

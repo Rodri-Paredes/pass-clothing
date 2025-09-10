@@ -18,6 +18,7 @@ export class CashRegisterService {
     });
 
     if (error) throw error;
+    
     return data;
   }
 
@@ -55,6 +56,16 @@ export class CashRegisterService {
   // Obtener movimientos de caja
   async getCashMovements(cashRegisterId: string): Promise<CashMovementWithUser[]> {
     const { data, error } = await supabase.rpc('get_cash_movements', {
+      p_cash_register_id: cashRegisterId
+    });
+
+    if (error) throw error;
+    return data || [];
+  }
+
+  // Obtener movimientos de caja agrupados por venta
+  async getCashMovementsGrouped(cashRegisterId: string): Promise<any[]> {
+    const { data, error } = await supabase.rpc('get_cash_movements_grouped', {
       p_cash_register_id: cashRegisterId
     });
 

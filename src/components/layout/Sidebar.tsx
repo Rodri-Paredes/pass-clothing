@@ -29,20 +29,20 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Productos', href: '/products', icon: Package },
     { name: 'Ventas', href: '/sales', icon: ShoppingCart },
-    {
+    /* {
       name: 'Flujo de Caja',
       href: '/cash-flow',
       icon: DollarSign,
       current: pathname === '/cash-flow'
     },
-    {
+     */{
       name: 'Cierre de Caja',
       href: '/cash-closure',
       icon: BarChart3,
       current: pathname === '/cash-closure'
     },
-    { name: 'Reportes', href: '/reports', icon: BarChart3 },
-    { name: 'Diagnóstico', href: '/diagnostic', icon: Database },
+   /*  { name: 'Reportes', href: '/reports', icon: BarChart3 },
+    { name: 'Diagnóstico', href: '/diagnostic', icon: Database }, */
     ...(user?.role === 'admin' ? [
       { name: 'Usuarios', href: '/users', icon: Users },
       { name: 'Configuración', href: '/settings', icon: Settings }

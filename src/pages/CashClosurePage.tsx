@@ -60,28 +60,28 @@ const loadTotals = async () => {
     });
     setTotalSales(totalAll ?? 0);
 
-    // Total ventas efectivo por sucursal
+    // Total ventas efectivo por sucursal (solo ventas EFECTIVO)
     const { data: totalCash } = await supabase.rpc('sum_total_sales', {
       payment_type_param: 'EFECTIVO',
       sale_date_param: selectedDate,
       branch_id_param: activeBranch.id,
     });
-    setTotalSalesCash(totalCash ?? 0);
+    let totalCashWithMixed = totalCash ?? 0;
 
-    // Total ventas QR por sucursal
+    // Total ventas QR por sucursal (solo ventas QR)
     const { data: totalQR } = await supabase.rpc('sum_total_sales', {
       payment_type_param: 'QR',
       sale_date_param: selectedDate,
       branch_id_param: activeBranch.id,
     });
-    setTotalSalesQR(totalQR ?? 0);
+    let totalQRWithMixed = totalQR ?? 0;
 
-    // Total ventas tarjeta por sucursal
+    // Total ventas tarjeta por sucursal (solo ventas TARJETA)
     const { data: totalCard } = await supabase.rpc('sum_total_sales_card', {
       sale_date_param: selectedDate,
       branch_id_param: activeBranch.id,
     });
-    setTotalSalesCard(totalCard ?? 0);
+    let totalCardWithMixed = totalCard ?? 0;
 
     // Número de ventas por sucursal
     const { data: numSales } = await supabase.rpc('count_sales', {
@@ -97,21 +97,24 @@ const loadTotals = async () => {
     });
     setProductsSold(prodSold ?? 0);
 
-    // Cargar información de descuentos - usando consulta directa en lugar de RPC
+    // Cargar información de descuentos - solo ventas con descuento > 0
     try {
       const { data: discountData } = await supabase
         .from('sales')
-        .select('discount_amount')
+        .select('id, discount_amount')
         .eq('branch_id', activeBranch.id)
         .gte('sale_date', `${selectedDate}T00:00:00`)
         .lte('sale_date', `${selectedDate}T23:59:59`)
-        .not('discount_amount', 'is', null);
+        .gt('discount_amount', 0);
 
-      if (discountData) {
+      if (discountData && discountData.length > 0) {
         const totalDiscounts = discountData.reduce((sum, sale) => sum + (sale.discount_amount || 0), 0);
         const salesWithDiscounts = discountData.length;
         setTotalDiscounts(totalDiscounts);
         setSalesWithDiscounts(salesWithDiscounts);
+      } else {
+        setTotalDiscounts(0);
+        setSalesWithDiscounts(0);
       }
     } catch (error) {
       console.log('Descuentos no disponibles:', error);
@@ -119,7 +122,7 @@ const loadTotals = async () => {
       setSalesWithDiscounts(0);
     }
 
-    // Cargar desglose de pagos mixtos - usando consulta directa en lugar de RPC
+    // Cargar desglose de pagos mixtos y sumar a los totales por método
     try {
       const { data: mixedData } = await supabase
         .from('sales')
@@ -133,10 +136,12 @@ const loadTotals = async () => {
         const breakdown: any[] = [];
         const methods = ['efectivo', 'qr', 'tarjeta'];
         
+        let mixedCash = 0;
+        let mixedQR = 0;
+        let mixedCard = 0;
+        
         methods.forEach(method => {
-          const total = mixedData.reduce((sum, sale) => {
-            return sum + (sale.payment_details?.[method] || 0);
-          }, 0);
+          const total = mixedData.reduce((sum, sale) => sum + (sale.payment_details?.[method] || 0), 0);
           
           if (total > 0) {
             breakdown.push({
@@ -145,15 +150,34 @@ const loadTotals = async () => {
               transaction_count: mixedData.length
             });
           }
+          if (method === 'efectivo') mixedCash = total;
+          if (method === 'qr') mixedQR = total;
+          if (method === 'tarjeta') mixedCard = total;
         });
         
         setMixedPaymentBreakdown(breakdown);
+
+        // Sumar componentes mixtos a los totales por método
+        totalCashWithMixed += mixedCash;
+        totalQRWithMixed += mixedQR;
+        totalCardWithMixed += mixedCard;
+        setTotalSalesCash(totalCashWithMixed);
+        setTotalSalesQR(totalQRWithMixed);
+        setTotalSalesCard(totalCardWithMixed);
       } else {
         setMixedPaymentBreakdown([]);
+        // Si no hay mixtos, asegurar que los totales reflejen solo los directos
+        setTotalSalesCash(totalCashWithMixed);
+        setTotalSalesQR(totalQRWithMixed);
+        setTotalSalesCard(totalCardWithMixed);
       }
     } catch (error) {
       console.log('Pagos mixtos no disponibles:', error);
       setMixedPaymentBreakdown([]);
+      // Asegurar que los totales no queden sin asignar
+      setTotalSalesCash(totalCashWithMixed);
+      setTotalSalesQR(totalQRWithMixed);
+      setTotalSalesCard(totalCardWithMixed);
     }
 
   } catch (error) {
