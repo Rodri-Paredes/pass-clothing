@@ -2,31 +2,167 @@ import { supabase } from '../lib/supabase';
 import type { DailyReport, Sale } from '../lib/types';
 
 export class CashClosureService {
-  async getDailyReport(branchId: string, date: string): Promise<DailyReport> {
-    // Crear fechas en zona horaria local de Bolivia
-    const startOfDay = new Date(date + 'T00:00:00-04:00'); // UTC-4 para Bolivia
-    const endOfDay = new Date(date + 'T23:59:59.999-04:00');
-
-    // Obtener ventas del día
-    const { data: sales, error: salesError } = await supabase
-      .from('sales')
-      .select(`
-        *,
-        user:users(name),
-        sale_items(
-          *,
-          variant:product_variants(
-            *,
-            product:products(name)
-          )
-        )
-      `)
+  async addCashMovement(
+    branchId: string,
+    userId: string,
+    movementType: 'INGRESO' | 'EGRESO',
+    amount: number,
+    description: string
+  ): Promise<void> {
+    // Obtener la caja abierta de la sucursal
+    const { data: openRegister, error: registerError } = await supabase
+      .from('cash_registers')
+      .select('id')
       .eq('branch_id', branchId)
-      .gte('sale_date', startOfDay.toISOString())
-      .lte('sale_date', endOfDay.toISOString())
-      .order('sale_date', { ascending: true });
+      .eq('status', 'ABIERTA')
+      .single();
+
+    if (registerError || !openRegister) {
+      throw new Error('No hay caja abierta en esta sucursal');
+    }
+
+    // Crear el movimiento
+    const { error: movementError } = await supabase
+      .from('cash_movements')
+      .insert({
+        cash_register_id: openRegister.id,
+        user_id: userId,
+        movement_type: movementType,
+        payment_type: 'EFECTIVO', // Los movimientos manuales son siempre en efectivo
+        amount,
+        description
+      });
+
+    if (movementError) throw movementError;
+  }
+  async getDailyCashFlow(branchId: string, date: string): Promise<{
+    sales: any[];
+    expenses: any[];
+    incomes: any[];
+    totalSales: number;
+    totalExpenses: number;
+    totalIncomes: number;
+    netFlow: number;
+  }> {
+    // Obtener ventas del día con zona horaria local via RPC
+    const { data: dailySales, error: salesError } = await supabase
+      .rpc('get_daily_sales_local', {
+        p_branch_id: branchId,
+        p_day: date
+      });
 
     if (salesError) throw salesError;
+
+    // Enriquecer ventas con usuario (y cualquier otro campo necesario)
+    let salesDetailed: any[] = [];
+    if (dailySales && dailySales.length > 0) {
+      const saleIds = dailySales.map((s: any) => s.id);
+      const { data: detailed, error: detailErr } = await supabase
+        .from('sales')
+        .select(`
+          *,
+          user:users(name)
+        `)
+        .eq('branch_id', branchId)
+        .in('id', saleIds)
+        .order('sale_date', { ascending: true });
+      if (detailErr) throw detailErr;
+      salesDetailed = detailed || [];
+    }
+
+    // Obtener movimientos de caja del día (solo movimientos manuales, NO ventas) via RPC
+    const { data: cashMovementsBase, error: movementsError } = await supabase
+      .rpc('get_daily_cash_movements_local', {
+        p_branch_id: branchId,
+        p_day: date
+      });
+
+    if (movementsError) throw movementsError;
+
+    // Enriquecer movimientos con usuario y cash_register (branch)
+    let cashMovements: any[] = [];
+    if (cashMovementsBase && cashMovementsBase.length > 0) {
+      const movementIds = cashMovementsBase.map((m: any) => m.id);
+      const { data: movementsDetailed, error: movDetailErr } = await supabase
+        .from('cash_movements')
+        .select(`
+          *,
+          user:users(name),
+          cash_register:cash_registers!inner(branch_id)
+        `)
+        .in('id', movementIds)
+        .order('created_at', { ascending: true });
+      if (movDetailErr) throw movDetailErr;
+      cashMovements = movementsDetailed || [];
+    }
+
+    const salesData = salesDetailed || [];
+    const movementsData = cashMovements || [];
+
+    // Separar movimientos en ingresos y egresos
+    const expensesData = movementsData.filter(movement => movement.movement_type === 'EGRESO');
+    const incomesData = movementsData.filter(movement => movement.movement_type === 'INGRESO');
+
+    // Calcular totales
+    const totalSales = salesData.reduce((sum, sale) => sum + sale.total, 0);
+    const totalExpenses = expensesData.reduce((sum, expense) => sum + expense.amount, 0);
+    const totalIncomes = incomesData.reduce((sum, income) => sum + income.amount, 0);
+    const netFlow = totalSales + totalIncomes - totalExpenses;
+
+    // Debug: mostrar los datos
+    console.log('Cash Flow Debug:', {
+      sales: salesData.length,
+      totalSales,
+      expenses: expensesData.length,
+      totalExpenses,
+      incomes: incomesData.length,
+      totalIncomes,
+      netFlow
+    });
+
+    return {
+      sales: salesData,
+      expenses: expensesData,
+      incomes: incomesData,
+      totalSales,
+      totalExpenses,
+      totalIncomes,
+      netFlow
+    };
+  }
+
+  async getDailyReport(branchId: string, date: string): Promise<DailyReport> {
+    // Obtener ventas del día con zona horaria local via RPC
+    const { data: salesIds, error: salesError } = await supabase
+      .rpc('get_daily_sales_local', {
+        p_branch_id: branchId,
+        p_day: date
+      });
+
+    if (salesError) throw salesError;
+
+    let sales: any[] = [];
+    if (salesIds && salesIds.length > 0) {
+      const ids = salesIds.map((s: any) => s.id);
+      const { data: salesDetailed, error: detailErr } = await supabase
+        .from('sales')
+        .select(`
+          *,
+          user:users(name),
+          sale_items(
+            *,
+            variant:product_variants(
+              *,
+              product:products(name)
+            )
+          )
+        `)
+        .eq('branch_id', branchId)
+        .in('id', ids)
+        .order('sale_date', { ascending: true });
+      if (detailErr) throw detailErr;
+      sales = salesDetailed || [];
+    }
 
     const salesData = sales || [];
     

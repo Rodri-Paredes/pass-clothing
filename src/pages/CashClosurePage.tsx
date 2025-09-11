@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Calendar, Printer, DollarSign, ShoppingCart, TrendingUp, FileText, Download, BarChart3, CreditCard, QrCode, Wallet, Percent, Users } from 'lucide-react';
+import { Calendar, Printer, DollarSign, ShoppingCart, TrendingUp, FileText, Download, BarChart3, CreditCard, QrCode, Wallet, Percent, Users, Plus } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
@@ -16,9 +16,8 @@ const CashClosurePage: React.FC = () => {
   const { sales } = useSalesStore();
   const getLocalDateString = () => {
     const now = new Date();
-    // Obtener la fecha en zona horaria de Bolivia (UTC-4)
-    const boliviaTime = new Date(now.getTime() - (4 * 60 * 60 * 1000)); // Restar 4 horas para UTC-4
-    return boliviaTime.toISOString().split('T')[0];
+    // Usar la fecha local del navegador directamente
+    return now.toISOString().split('T')[0];
   };
   const [selectedDate, setSelectedDate] = useState(getLocalDateString());
   const [dailyReport, setDailyReport] = useState<DailyReport | null>(null);
@@ -39,11 +38,18 @@ const CashClosurePage: React.FC = () => {
   const [showUnitsList, setShowUnitsList] = useState(false);
   const [salesList, setSalesList] = useState<any[]>([]);
   const [unitsList, setUnitsList] = useState<any[]>([]);
+  const [cashFlowData, setCashFlowData] = useState<any>(null);
+  const [isLoadingCashFlow, setIsLoadingCashFlow] = useState(false);
+  const [showCashMovementModal, setShowCashMovementModal] = useState(false);
+  const [movementType, setMovementType] = useState<'INGRESO' | 'EGRESO'>('INGRESO');
+  const [movementAmount, setMovementAmount] = useState('');
+  const [movementDescription, setMovementDescription] = useState('');
 
   useEffect(() => {
     if (activeBranch && selectedDate) {
       loadDailyReport();
       loadTotals();
+      loadCashFlow();
     }
   }, [activeBranch, selectedDate]);
 
@@ -97,24 +103,35 @@ const loadTotals = async () => {
     });
     setProductsSold(prodSold ?? 0);
 
-    // Cargar información de descuentos - solo ventas con descuento > 0
+    // Cargar información de descuentos por ventas del día (mantener lógica anterior)
     try {
-      const { data: discountData } = await supabase
-        .from('sales')
-        .select('id, discount_amount')
-        .eq('branch_id', activeBranch.id)
-        .gte('sale_date', `${selectedDate}T00:00:00`)
-        .lte('sale_date', `${selectedDate}T23:59:59`)
-        .gt('discount_amount', 0);
+      const { data: dailySales, error: rpcErr } = await supabase.rpc('get_daily_sales_local', {
+        p_branch_id: activeBranch.id,
+        p_day: selectedDate
+      });
+      if (rpcErr) throw rpcErr;
 
-      if (discountData && discountData.length > 0) {
-        const totalDiscounts = discountData.reduce((sum, sale) => sum + (sale.discount_amount || 0), 0);
-        const salesWithDiscounts = discountData.length;
-        setTotalDiscounts(totalDiscounts);
-        setSalesWithDiscounts(salesWithDiscounts);
-      } else {
+      const ids = (dailySales || []).map((s: any) => s.id);
+      if (ids.length === 0) {
         setTotalDiscounts(0);
         setSalesWithDiscounts(0);
+      } else {
+        const { data: discountData, error: discErr } = await supabase
+          .from('sales')
+          .select('id, discount_amount')
+          .eq('branch_id', activeBranch.id)
+          .in('id', ids)
+          .gt('discount_amount', 0);
+        if (discErr) throw discErr;
+
+        if (discountData && discountData.length > 0) {
+          const totalDs = discountData.reduce((sum, sale) => sum + (sale.discount_amount || 0), 0);
+          setTotalDiscounts(totalDs);
+          setSalesWithDiscounts(discountData.length);
+        } else {
+          setTotalDiscounts(0);
+          setSalesWithDiscounts(0);
+        }
       }
     } catch (error) {
       console.log('Descuentos no disponibles:', error);
@@ -122,59 +139,71 @@ const loadTotals = async () => {
       setSalesWithDiscounts(0);
     }
 
-    // Cargar desglose de pagos mixtos y sumar a los totales por método
+    // Cargar desglose de pagos mixtos como antes pero filtrando ids del día local
     try {
-      const { data: mixedData } = await supabase
-        .from('sales')
-        .select('payment_type, payment_details, total')
-        .eq('branch_id', activeBranch.id)
-        .eq('payment_type', 'MIXTO')
-        .gte('sale_date', `${selectedDate}T00:00:00`)
-        .lte('sale_date', `${selectedDate}T23:59:59`);
+      const { data: dailySales, error: rpcErr } = await supabase.rpc('get_daily_sales_local', {
+        p_branch_id: activeBranch.id,
+        p_day: selectedDate
+      });
+      if (rpcErr) throw rpcErr;
 
-      if (mixedData && mixedData.length > 0) {
-        const breakdown: any[] = [];
-        const methods = ['efectivo', 'qr', 'tarjeta'];
-        
-        let mixedCash = 0;
-        let mixedQR = 0;
-        let mixedCard = 0;
-        
-        methods.forEach(method => {
-          const total = mixedData.reduce((sum, sale) => sum + (sale.payment_details?.[method] || 0), 0);
-          
-          if (total > 0) {
-            breakdown.push({
-              payment_method: method,
-              total_amount: total,
-              transaction_count: mixedData.length
-            });
-          }
-          if (method === 'efectivo') mixedCash = total;
-          if (method === 'qr') mixedQR = total;
-          if (method === 'tarjeta') mixedCard = total;
-        });
-        
-        setMixedPaymentBreakdown(breakdown);
-
-        // Sumar componentes mixtos a los totales por método
-        totalCashWithMixed += mixedCash;
-        totalQRWithMixed += mixedQR;
-        totalCardWithMixed += mixedCard;
+      const ids = (dailySales || []).map((s: any) => s.id);
+      if (ids.length === 0) {
+        setMixedPaymentBreakdown([]);
         setTotalSalesCash(totalCashWithMixed);
         setTotalSalesQR(totalQRWithMixed);
         setTotalSalesCard(totalCardWithMixed);
       } else {
-        setMixedPaymentBreakdown([]);
-        // Si no hay mixtos, asegurar que los totales reflejen solo los directos
-        setTotalSalesCash(totalCashWithMixed);
-        setTotalSalesQR(totalQRWithMixed);
-        setTotalSalesCard(totalCardWithMixed);
+        const { data: mixedData, error: mixErr } = await supabase
+          .from('sales')
+          .select('payment_type, payment_details, total')
+          .eq('branch_id', activeBranch.id)
+          .eq('payment_type', 'MIXTO')
+          .in('id', ids);
+        if (mixErr) throw mixErr;
+
+        if (mixedData && mixedData.length > 0) {
+          const breakdown: any[] = [];
+          const methods = ['efectivo', 'qr', 'tarjeta'];
+          
+          let mixedCash = 0;
+          let mixedQR = 0;
+          let mixedCard = 0;
+          
+          methods.forEach(method => {
+            const total = mixedData.reduce((sum, sale) => sum + (sale.payment_details?.[method] || 0), 0);
+            
+            if (total > 0) {
+              breakdown.push({
+                payment_method: method,
+                total_amount: total,
+                transaction_count: mixedData.length
+              });
+            }
+            if (method === 'efectivo') mixedCash = total;
+            if (method === 'qr') mixedQR = total;
+            if (method === 'tarjeta') mixedCard = total;
+          });
+          
+          setMixedPaymentBreakdown(breakdown);
+
+          // Sumar componentes mixtos a los totales por método
+          totalCashWithMixed += mixedCash;
+          totalQRWithMixed += mixedQR;
+          totalCardWithMixed += mixedCard;
+          setTotalSalesCash(totalCashWithMixed);
+          setTotalSalesQR(totalQRWithMixed);
+          setTotalSalesCard(totalCardWithMixed);
+        } else {
+          setMixedPaymentBreakdown([]);
+          setTotalSalesCash(totalCashWithMixed);
+          setTotalSalesQR(totalQRWithMixed);
+          setTotalSalesCard(totalCardWithMixed);
+        }
       }
     } catch (error) {
       console.log('Pagos mixtos no disponibles:', error);
       setMixedPaymentBreakdown([]);
-      // Asegurar que los totales no queden sin asignar
       setTotalSalesCash(totalCashWithMixed);
       setTotalSalesQR(totalQRWithMixed);
       setTotalSalesCard(totalCardWithMixed);
@@ -184,6 +213,48 @@ const loadTotals = async () => {
     console.error('Error loading payment totals:', error);
   }
 };
+
+  const loadCashFlow = async () => {
+    if (!activeBranch) return;
+    
+    setIsLoadingCashFlow(true);
+    try {
+      const cashFlow = await cashClosureService.getDailyCashFlow(activeBranch.id, selectedDate);
+      setCashFlowData(cashFlow);
+    } catch (error) {
+      console.error('Error loading cash flow:', error);
+      setCashFlowData(null);
+    } finally {
+      setIsLoadingCashFlow(false);
+    }
+  };
+
+  const handleAddCashMovement = async () => {
+    if (!activeBranch || !user || !movementAmount || !movementDescription) return;
+    
+    try {
+      await cashClosureService.addCashMovement(
+        activeBranch.id,
+        user.id,
+        movementType,
+        parseFloat(movementAmount),
+        movementDescription
+      );
+      
+      // Limpiar formulario
+      setMovementAmount('');
+      setMovementDescription('');
+      setShowCashMovementModal(false);
+      
+      // Recargar datos
+      await loadCashFlow();
+      
+      alert('Movimiento agregado exitosamente');
+    } catch (error) {
+      console.error('Error adding cash movement:', error);
+      alert('Error al agregar movimiento: ' + (error as Error).message);
+    }
+  };
 
 
   const loadDailyReport = async () => {
@@ -242,11 +313,14 @@ const loadTotals = async () => {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('es-ES', {
+    // Crear la fecha usando la zona horaria local
+    const date = new Date(dateString + 'T00:00:00');
+    return date.toLocaleDateString('es-ES', {
       weekday: 'long',
       year: 'numeric',
       month: 'long',
-      day: 'numeric'
+      day: 'numeric',
+      timeZone: 'America/La_Paz' // Zona horaria de Bolivia
     });
   };
 
@@ -311,7 +385,21 @@ const loadTotals = async () => {
     if (!activeBranch) return;
     
     try {
-      const { data: sales, error } = await supabase
+      // Obtener ventas del día (zona America/La_Paz) vía RPC y luego enriquecer
+      const { data: dailySales, error: rpcError } = await supabase.rpc('get_daily_sales_local', {
+        p_branch_id: activeBranch.id,
+        p_day: selectedDate
+      });
+      if (rpcError) throw rpcError;
+
+      const ids = (dailySales || []).map((s: any) => s.id);
+      if (ids.length === 0) {
+        setSalesList([]);
+        setShowSalesList(true);
+        return;
+      }
+
+      const { data: detailed, error: qError } = await supabase
         .from('sales')
         .select(`
           *,
@@ -325,13 +413,12 @@ const loadTotals = async () => {
           user:users (name)
         `)
         .eq('branch_id', activeBranch.id)
-        .gte('sale_date', `${selectedDate}T00:00:00`)
-        .lte('sale_date', `${selectedDate}T23:59:59`)
+        .in('id', ids)
         .order('sale_date', { ascending: false });
 
-      if (error) throw error;
-      
-      setSalesList(sales || []);
+      if (qError) throw qError;
+
+      setSalesList(detailed || []);
       setShowSalesList(true);
     } catch (error) {
       console.error('Error loading sales list:', error);
@@ -342,19 +429,15 @@ const loadTotals = async () => {
     if (!activeBranch) return;
     
     try {
-      // Primero obtener las ventas del día
-      const { data: sales, error: salesError } = await supabase
-        .from('sales')
-        .select('id, sale_date, user:users(name)')
-        .eq('branch_id', activeBranch.id)
-        .gte('sale_date', `${selectedDate}T00:00:00`)
-        .lte('sale_date', `${selectedDate}T23:59:59`)
-        .order('sale_date', { ascending: false });
+      // Primero obtener las ventas del día vía RPC (zona local)
+      const { data: dailySales, error: rpcError } = await supabase.rpc('get_daily_sales_local', {
+        p_branch_id: activeBranch.id,
+        p_day: selectedDate
+      });
+      if (rpcError) throw rpcError;
 
-      if (salesError) throw salesError;
-
-      if (sales && sales.length > 0) {
-        const saleIds = sales.map(sale => sale.id);
+      if (dailySales && dailySales.length > 0) {
+        const saleIds = dailySales.map((sale: any) => sale.id);
         
         // Luego obtener los items de esas ventas
         const { data: units, error: unitsError } = await supabase
@@ -773,6 +856,234 @@ const loadTotals = async () => {
             </p>
           </div>
         )}
+
+        {/* Flujo de Caja - Nueva sección */}
+        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+          <div className="p-6 sm:p-8 border-b border-gray-100">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center">
+                  <DollarSign className="h-4 w-4 text-white" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900">Flujo de Caja del Día</h3>
+              </div>
+              <Button
+                onClick={() => setShowCashMovementModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white"
+              >
+                <Plus className="h-4 w-4" />
+                Agregar Movimiento
+              </Button>
+            </div>
+            <p className="text-gray-600">{formatDate(selectedDate)}</p>
+          </div>
+          
+          {isLoadingCashFlow ? (
+            <div className="p-8 text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Cargando flujo de caja...</p>
+            </div>
+          ) : cashFlowData ? (
+            
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      Fecha/Hora
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      Concepto
+                    </th>
+                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      Ingreso
+                    </th>
+                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      Egreso
+                    </th>
+                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      Saldo
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {/* Saldo inicial */}
+                  <tr className="bg-blue-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {new Date(selectedDate + 'T00:00:00').toLocaleDateString('es-ES', {
+                        timeZone: 'America/La_Paz'
+                      })} 00:00
+                    </td>
+                    <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                      Saldo Inicial
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
+                      -
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
+                      -
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-blue-900 text-right">
+                      {formatCurrency(0)}
+                    </td>
+                  </tr>
+
+                  {/* Transacciones del día */}
+                  {(() => {
+                    // 1) Construir transacciones sin saldo acumulado
+                    const transactionsBase: any[] = [];
+
+                    // Ventas (ingresos)
+                    cashFlowData.sales.forEach((sale: any) => {
+                      transactionsBase.push({
+                        type: 'sale',
+                        data: sale,
+                        amountDelta: sale.total,
+                        timestamp: sale.sale_date
+                      });
+                    });
+
+                    // Ingresos manuales
+                    cashFlowData.incomes.forEach((income: any) => {
+                      transactionsBase.push({
+                        type: 'income',
+                        data: income,
+                        amountDelta: income.amount,
+                        timestamp: income.created_at
+                      });
+                    });
+
+                    // Egresos manuales
+                    cashFlowData.expenses.forEach((expense: any) => {
+                      transactionsBase.push({
+                        type: 'expense',
+                        data: expense,
+                        amountDelta: -expense.amount,
+                        timestamp: expense.created_at
+                      });
+                    });
+
+                    // 2) Orden cronológico por timestamp
+                    transactionsBase.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+                    // 3) Calcular saldos acumulados después de ordenar
+                    let runningBalance = 0;
+                    const transactions = transactionsBase.map(t => {
+                      runningBalance += t.amountDelta;
+                      return {
+                        ...t,
+                        balance: runningBalance,
+                        time: new Date(t.timestamp).toLocaleTimeString('es-ES', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          timeZone: 'America/La_Paz'
+                        })
+                      };
+                    });
+
+                    // Si no hay transacciones, mostrar mensaje
+                    if (transactions.length === 0) {
+                      return (
+                        <tr>
+                          <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                            <div className="flex flex-col items-center">
+                              <DollarSign className="h-12 w-12 text-gray-300 mb-2" />
+                              <p>No hay transacciones registradas para este día</p>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    return transactions.map((transaction, index) => (
+                      <tr key={index} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {transaction.time}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-900">
+                          {transaction.type === 'sale' && (
+                            <div>
+                              <span className="font-medium text-green-700">Venta #{transaction.data.id.slice(-8)}</span>
+                              <div className="text-xs text-gray-500">
+                                {transaction.data.user?.name || 'N/A'}
+                              </div>
+                            </div>
+                          )}
+                          {transaction.type === 'income' && (
+                            <div>
+                              <span className="font-medium text-blue-700">{transaction.data.description}</span>
+                              <div className="text-xs text-gray-500">
+                                {transaction.data.user?.name || 'N/A'}
+                              </div>
+                            </div>
+                          )}
+                          {transaction.type === 'expense' && (
+                            <div>
+                              <span className="font-medium text-red-700">{transaction.data.description}</span>
+                              <div className="text-xs text-gray-500">
+                                {transaction.data.user?.name || 'N/A'}
+                              </div>
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
+                          {transaction.type === 'sale' || transaction.type === 'income' ? (
+                            <span className="text-green-600 font-semibold">
+                              {formatCurrency(transaction.type === 'sale' ? transaction.data.total : transaction.data.amount)}
+                            </span>
+                          ) : (
+                            '-'
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
+                          {transaction.type === 'expense' ? (
+                            <span className="text-red-600 font-semibold">
+                              {formatCurrency(transaction.data.amount)}
+                            </span>
+                          ) : (
+                            '-'
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 text-right">
+                          {formatCurrency(transaction.balance)}
+                        </td>
+                      </tr>
+                    ));
+                  })()}
+
+                  {/* Resumen final */}
+                  <tr className="bg-gray-100 border-t-2 border-gray-300">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">
+                      {new Date(selectedDate + 'T00:00:00').toLocaleDateString('es-ES', {
+                        timeZone: 'America/La_Paz'
+                      })} 23:59
+                    </td>
+                    <td className="px-6 py-4 text-sm font-bold text-gray-900">
+                      Saldo Final del Día
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-600 text-right">
+                      {formatCurrency(cashFlowData.totalSales + cashFlowData.totalIncomes)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-red-600 text-right">
+                      {formatCurrency(cashFlowData.totalExpenses)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 text-right">
+                      {formatCurrency(cashFlowData.netFlow)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="p-8 text-center">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <DollarSign className="h-8 w-8 text-gray-400" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Sin datos de flujo de caja</h3>
+              <p className="text-gray-600">No se pudieron cargar los datos del flujo de caja para esta fecha</p>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Modal de Detalles de Venta */}
@@ -1125,6 +1436,97 @@ const loadTotals = async () => {
           </div>
         </div>
         )}
+
+      {/* Modal para Agregar Movimiento de Caja */}
+      {showCashMovementModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center">
+                    <DollarSign className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900">Agregar Movimiento de Caja</h3>
+                    <p className="text-sm text-gray-600">Registrar ingreso o egreso manual</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowCashMovementModal(false)}
+                  className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center hover:bg-gray-200 transition-colors"
+                >
+                  <span className="text-gray-600 text-xl">×</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Tipo de Movimiento
+                  </label>
+                  <select
+                    value={movementType}
+                    onChange={(e) => setMovementType(e.target.value as 'INGRESO' | 'EGRESO')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  >
+                    <option value="INGRESO">Ingreso</option>
+                    <option value="EGRESO">Egreso</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Monto (Bs.)
+                  </label>
+                  <Input
+                    type="number"
+                    value={movementAmount}
+                    onChange={(e) => setMovementAmount(e.target.value)}
+                    placeholder="0.00"
+                    step="0.01"
+                    min="0"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Descripción
+                  </label>
+                  <textarea
+                    value={movementDescription}
+                    onChange={(e) => setMovementDescription(e.target.value)}
+                    placeholder="Ej: Pago de servicios, retiro para cambio, etc."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    rows={3}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-gray-200 bg-gray-50">
+              <div className="flex justify-end gap-3">
+                <Button
+                  onClick={() => setShowCashMovementModal(false)}
+                  variant="secondary"
+                  className="px-6 py-2"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleAddCashMovement}
+                  disabled={!movementAmount || !movementDescription}
+                  className="px-6 py-2 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white"
+                >
+                  Agregar Movimiento
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
