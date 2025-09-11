@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   TrendingUp, 
   Package, 
@@ -13,6 +13,7 @@ import { useSalesStore } from '../store/salesStore';
 const DashboardPage: React.FC = () => {
   const { activeBranch } = useAuthStore();
   const { dashboardStats, loadDashboardStats, isLoading } = useSalesStore();
+  const [showAllLowStock, setShowAllLowStock] = useState(false);
 
   useEffect(() => {
     if (activeBranch) {
@@ -112,16 +113,29 @@ const DashboardPage: React.FC = () => {
           </h3>
           <div className="space-y-3">
             {dashboardStats?.lowStockProducts?.length ? (
-              dashboardStats.lowStockProducts.map((product, index) => {
-                return (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-gray-600">
+                    Mostrando {showAllLowStock ? dashboardStats.lowStockProducts.length : Math.min(5, dashboardStats.lowStockProducts.length)} de {dashboardStats.lowStockProducts.length}
+                  </span>
+                  {dashboardStats.lowStockProducts.length > 5 && (
+                    <button
+                      onClick={() => setShowAllLowStock(v => !v)}
+                      className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                    >
+                      {showAllLowStock ? 'Ver menos' : 'Ver todos'}
+                    </button>
+                  )}
+                </div>
+                {(showAllLowStock ? dashboardStats.lowStockProducts : dashboardStats.lowStockProducts.slice(0, 5)).map((product, index) => (
                   <div key={index} className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
                     <span className="font-medium text-gray-900">{product.name}</span>
                     <span className="text-orange-600 font-semibold">
                       {product.quantity} unidades
                     </span>
                   </div>
-                );
-              })
+                ))}
+              </>
             ) : (
               <div className="text-center py-8 text-gray-500">
                 <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />

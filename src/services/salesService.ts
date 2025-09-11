@@ -236,6 +236,8 @@ export class SalesService {
       total: sale.total
     })) || [];
 
+    const getFirst = (value: any) => Array.isArray(value) ? (value[0] ?? undefined) : value;
+
     return {
       monthlyTotal,
       totalSales: totalSales || 0,
@@ -246,10 +248,14 @@ export class SalesService {
           }
         : undefined,
       lowStockProducts: Array.isArray(lowStockData)
-        ? lowStockData.map(item => ({
-            name: item.variant?.[0]?.product?.[0]?.name as string || '',
-            quantity: item.quantity as number
-          }))
+        ? lowStockData.map(item => {
+            const variant = getFirst(item.variant);
+            const product = getFirst(variant?.product);
+            return {
+              name: (product?.name as string) || 'Producto',
+              quantity: item.quantity as number
+            };
+          })
         : [],
       dailySales
     };
