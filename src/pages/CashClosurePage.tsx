@@ -15,9 +15,12 @@ const CashClosurePage: React.FC = () => {
   const { activeBranch, user } = useAuthStore();
   const { sales } = useSalesStore();
   const getLocalDateString = () => {
-    const now = new Date();
-    // Usar la fecha local del navegador directamente
-    return now.toISOString().split('T')[0];
+    // Obtener fecha actual en zona horaria de Bolivia y formatearla a yyyy-mm-dd
+    const laPazNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/La_Paz' }));
+    const year = laPazNow.getFullYear();
+    const month = String(laPazNow.getMonth() + 1).padStart(2, '0');
+    const day = String(laPazNow.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
   const [selectedDate, setSelectedDate] = useState(getLocalDateString());
   const [dailyReport, setDailyReport] = useState<DailyReport | null>(null);
@@ -313,14 +316,14 @@ const loadTotals = async () => {
   };
 
   const formatDate = (dateString: string) => {
-    // Crear la fecha usando la zona horaria local
-    const date = new Date(dateString + 'T00:00:00');
+    // Mostrar fecha en zona horaria de Bolivia
+    const date = new Date(dateString + 'T00:00:00-04:00');
     return date.toLocaleDateString('es-ES', {
       weekday: 'long',
       year: 'numeric',
       month: 'long',
       day: 'numeric',
-      timeZone: 'America/La_Paz' // Zona horaria de Bolivia
+      timeZone: 'America/La_Paz'
     });
   };
 
@@ -756,7 +759,8 @@ const loadTotals = async () => {
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                             {new Date(sale.sale_date).toLocaleTimeString('es-ES', {
                               hour: '2-digit',
-                              minute: '2-digit'
+                              minute: '2-digit',
+                              timeZone: 'America/La_Paz'
                             })}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -1106,7 +1110,8 @@ const loadTotals = async () => {
                         day: 'numeric'
                       })} - {new Date(selectedSale.sale_date).toLocaleTimeString('es-ES', {
                         hour: '2-digit',
-                        minute: '2-digit'
+                        minute: '2-digit',
+                        timeZone: 'America/La_Paz'
                       })}
                     </p>
                   </div>
@@ -1292,7 +1297,8 @@ const loadTotals = async () => {
                             <span className="text-sm font-medium text-gray-600">
                               {new Date(sale.sale_date).toLocaleTimeString('es-ES', {
                                 hour: '2-digit',
-                                minute: '2-digit'
+                                minute: '2-digit',
+                                timeZone: 'America/La_Paz'
                               })}
                             </span>
                             <span className="text-sm font-medium text-purple-600">
@@ -1396,7 +1402,8 @@ const loadTotals = async () => {
                           <span className="text-xs text-gray-500">
                             Venta: {new Date(item.sale?.sale_date).toLocaleTimeString('es-ES', {
                               hour: '2-digit',
-                              minute: '2-digit'
+                              minute: '2-digit',
+                              timeZone: 'America/La_Paz'
                             })}
                           </span>
                           <span className="text-xs text-gray-500">

@@ -64,9 +64,16 @@ const CashFlowPage: React.FC = () => {
   const [movementAmount, setMovementAmount] = useState('');
   const [movementDescription, setMovementDescription] = useState('');
 
-  // Estados para fechas
-  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+  // Estados para fechas (ajustadas a Bolivia)
+  const getLaPazDate = () => {
+    const laPazNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/La_Paz' }));
+    const y = laPazNow.getFullYear();
+    const m = String(laPazNow.getMonth() + 1).padStart(2, '0');
+    const d = String(laPazNow.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+  const [startDate, setStartDate] = useState(getLaPazDate());
+  const [endDate, setEndDate] = useState(getLaPazDate());
 
   useEffect(() => {
     if (activeBranch) {

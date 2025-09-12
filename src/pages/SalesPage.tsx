@@ -557,7 +557,9 @@ const SalesPage: React.FC = () => {
                     </div>
                     <div className="min-w-0">
                       <h3 className="font-bold text-gray-900 text-base md:text-lg truncate">
-                        Venta #{sale.id.slice(-8)}
+                        {(sale.sale_items && sale.sale_items[0]?.variant?.product?.name)
+                          ? sale.sale_items[0].variant.product.name
+                          : `Venta #${sale.id.slice(-8)}`}
                       </h3>
                       <div className="flex flex-wrap items-center gap-2 md:gap-4 text-xs md:text-sm text-gray-600 mt-1">
                         <span className="flex items-center gap-1">
@@ -634,7 +636,10 @@ const SalesPage: React.FC = () => {
               <ul className="mt-3 space-y-3 md:space-y-4 max-h-64 md:max-h-80 overflow-y-auto pr-1">
                 {selectedSale.sale_items?.map((item: any, idx: number) => (
                   <li key={idx} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 md:px-4 md:py-3 text-sm md:text-base shadow">
-                    <span className="font-medium text-gray-900 truncate">{item.product?.name || '-'}</span>
+                    <span className="font-medium text-gray-900 truncate">
+                      {item.variant?.product?.name || '-'}
+                      {item.variant?.size ? ` (Talla: ${item.variant.size})` : ''}
+                    </span>
                     <span className="text-gray-600">x{item.quantity}</span>
                     <span className="font-bold text-blue-700">${item.unit_price.toFixed(2)}</span>
                   </li>
