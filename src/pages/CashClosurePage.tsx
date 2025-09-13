@@ -61,13 +61,16 @@ const loadTotals = async () => {
   if (!activeBranch) return;
   
   try {
-    // Obtener todas las ventas del día con consulta directa
+    // Obtener todas las ventas del día con consulta directa usando rango de fechas
+    const startDate = `${selectedDate}T00:00:00-04:00`;
+    const endDate = `${selectedDate}T23:59:59-04:00`;
+    
     const { data: dailySales, error: salesError } = await supabase
       .from('sales')
       .select('*')
       .eq('branch_id', activeBranch.id)
-      .gte('sale_date', `${selectedDate}T00:00:00-04:00`)
-      .lt('sale_date', `${selectedDate}T23:59:59-04:00`);
+      .gte('sale_date', startDate)
+      .lte('sale_date', endDate);
 
     if (salesError) throw salesError;
 
@@ -351,18 +354,26 @@ const loadTotals = async () => {
   const handleSalesCardClick = async () => {
     if (!activeBranch) return;
     
+    console.log('handleSalesCardClick called for date:', selectedDate, 'branch:', activeBranch.id);
+    
     try {
-      // Obtener ventas del día con consulta directa
+      // Obtener ventas del día con consulta directa usando rango de fechas
+      const startDate = `${selectedDate}T00:00:00-04:00`;
+      const endDate = `${selectedDate}T23:59:59-04:00`;
+      
       const { data: dailySales, error: salesError } = await supabase
         .from('sales')
         .select('*')
         .eq('branch_id', activeBranch.id)
-        .gte('sale_date', `${selectedDate}T00:00:00-04:00`)
-        .lt('sale_date', `${selectedDate}T23:59:59-04:00`);
+        .gte('sale_date', startDate)
+        .lte('sale_date', endDate);
+
+      console.log('Sales query result:', { dailySales, error: salesError });
 
       if (salesError) throw salesError;
 
       const sales = dailySales || [];
+      console.log('Found sales:', sales.length);
       if (sales.length === 0) {
         setSalesList([]);
         setShowSalesList(true);
@@ -399,18 +410,26 @@ const loadTotals = async () => {
   const handleUnitsCardClick = async () => {
     if (!activeBranch) return;
     
+    console.log('handleUnitsCardClick called for date:', selectedDate, 'branch:', activeBranch.id);
+    
     try {
-      // Obtener las ventas del día con consulta directa
+      // Obtener las ventas del día con consulta directa usando rango de fechas
+      const startDate = `${selectedDate}T00:00:00-04:00`;
+      const endDate = `${selectedDate}T23:59:59-04:00`;
+      
       const { data: dailySales, error: salesError } = await supabase
         .from('sales')
         .select('*')
         .eq('branch_id', activeBranch.id)
-        .gte('sale_date', `${selectedDate}T00:00:00-04:00`)
-        .lt('sale_date', `${selectedDate}T23:59:59-04:00`);
+        .gte('sale_date', startDate)
+        .lte('sale_date', endDate);
+
+      console.log('Units query result:', { dailySales, error: salesError });
 
       if (salesError) throw salesError;
 
       const sales = dailySales || [];
+      console.log('Found sales for units:', sales.length);
       if (sales.length > 0) {
         const saleIds = sales.map(sale => sale.id);
         
@@ -687,7 +706,8 @@ const loadTotals = async () => {
         {/* Contenido Principal */}
         {dailyReport ? (
           <div className="space-y-8">
-            {/* Detalle de ventas - Mejorado */}
+            {/* Detalle de ventas - TEMPORALMENTE COMENTADO */}
+            {/* 
             <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
               <div className="p-6 sm:p-8 border-b border-gray-100">
                 <div className="flex items-center gap-3 mb-2">
@@ -768,7 +788,8 @@ const loadTotals = async () => {
                 )}
             </div>
 
-            {/* Productos más vendidos - Mejorado */}
+            {/* Productos más vendidos - TEMPORALMENTE COMENTADO */}
+            {/* 
             <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
               <div className="p-6 sm:p-8 border-b border-gray-100">
                 <div className="flex items-center gap-3 mb-2">
@@ -816,6 +837,7 @@ const loadTotals = async () => {
               )}
             </div>
             </div>
+            */}
           </div>
         ) : (
           <div className="bg-white rounded-2xl shadow-lg p-8 text-center">
@@ -971,7 +993,7 @@ const loadTotals = async () => {
                         <td className="px-6 py-4 text-sm text-gray-900">
                           {transaction.type === 'sale' && (
                             <div>
-                              <span className="font-medium text-green-700">Venta #{transaction.data.id.slice(-8)}</span>
+                              <span className="font-medium text-green-700">{getProductNames(transaction.data)}</span>
                               <div className="text-xs text-gray-500">
                                 {transaction.data.user?.name || 'N/A'}
                               </div>

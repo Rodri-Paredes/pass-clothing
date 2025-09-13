@@ -45,12 +45,15 @@ export class CashClosureService {
     netFlow: number;
   }> {
     // Obtener ventas del día con zona horaria local - consulta directa
+    const startDate = `${date}T00:00:00-04:00`;
+    const endDate = `${date}T23:59:59-04:00`;
+    
     const { data: dailySales, error: salesError } = await supabase
       .from('sales')
       .select('*')
       .eq('branch_id', branchId)
-      .gte('sale_date', `${date}T00:00:00-04:00`)
-      .lt('sale_date', `${date}T23:59:59-04:00`)
+      .gte('sale_date', startDate)
+      .lte('sale_date', endDate)
       .order('sale_date', { ascending: true });
 
     console.log('Direct query result:', { dailySales, error: salesError, date, branchId });
@@ -65,7 +68,14 @@ export class CashClosureService {
         .from('sales')
         .select(`
           *,
-          user:users(name)
+          user:users(name),
+          sale_items (
+            *,
+            variant:product_variants (
+              *,
+              product:products (name)
+            )
+          )
         `)
         .eq('branch_id', branchId)
         .in('id', saleIds)
@@ -83,8 +93,8 @@ export class CashClosureService {
       `)
       .eq('cash_registers.branch_id', branchId)
       .is('reference_id', null)
-      .gte('created_at', `${date}T00:00:00-04:00`)
-      .lt('created_at', `${date}T23:59:59-04:00`)
+      .gte('created_at', startDate)
+      .lte('created_at', endDate)
       .order('created_at', { ascending: true });
 
     if (movementsError) throw movementsError;
