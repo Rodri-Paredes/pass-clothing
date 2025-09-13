@@ -61,156 +61,96 @@ const loadTotals = async () => {
   if (!activeBranch) return;
   
   try {
-    // Total ventas (todos) por sucursal
-    const { data: totalAll } = await supabase.rpc('sum_total_sales', {
-      payment_type_param: null,
-      sale_date_param: selectedDate,
-      branch_id_param: activeBranch.id,
-    });
-    setTotalSales(totalAll ?? 0);
+    // Obtener todas las ventas del día con consulta directa
+    const { data: dailySales, error: salesError } = await supabase
+      .from('sales')
+      .select('*')
+      .eq('branch_id', activeBranch.id)
+      .gte('sale_date', `${selectedDate}T00:00:00-04:00`)
+      .lt('sale_date', `${selectedDate}T23:59:59-04:00`);
 
-    // Total ventas efectivo por sucursal (solo ventas EFECTIVO)
-    const { data: totalCash } = await supabase.rpc('sum_total_sales', {
-      payment_type_param: 'EFECTIVO',
-      sale_date_param: selectedDate,
-      branch_id_param: activeBranch.id,
-    });
-    let totalCashWithMixed = totalCash ?? 0;
+    if (salesError) throw salesError;
 
-    // Total ventas QR por sucursal (solo ventas QR)
-    const { data: totalQR } = await supabase.rpc('sum_total_sales', {
-      payment_type_param: 'QR',
-      sale_date_param: selectedDate,
-      branch_id_param: activeBranch.id,
-    });
-    let totalQRWithMixed = totalQR ?? 0;
+    const sales = dailySales || [];
 
-    // Total ventas tarjeta por sucursal (solo ventas TARJETA)
-    const { data: totalCard } = await supabase.rpc('sum_total_sales_card', {
-      sale_date_param: selectedDate,
-      branch_id_param: activeBranch.id,
-    });
-    let totalCardWithMixed = totalCard ?? 0;
+    // Calcular totales
+    const totalAll = sales.reduce((sum, s) => sum + (s.total || 0), 0);
+    setTotalSales(totalAll);
 
-    // Número de ventas por sucursal
-    const { data: numSales } = await supabase.rpc('count_sales', {
-      sale_date_param: selectedDate,
-      branch_id_param: activeBranch.id,
-    });
-    setNumberOfSales(numSales ?? 0);
+    // Totales por tipo de pago
+    let totalCash = sales
+      .filter(s => s.payment_type === 'EFECTIVO')
+      .reduce((sum, s) => sum + (s.total || 0), 0);
 
-    // Productos vendidos por sucursal
-    const { data: prodSold } = await supabase.rpc('count_products_sold', {
-      sale_date_param: selectedDate,
-      branch_id_param: activeBranch.id,
-    });
-    setProductsSold(prodSold ?? 0);
+    let totalQR = sales
+      .filter(s => s.payment_type === 'QR')
+      .reduce((sum, s) => sum + (s.total || 0), 0);
 
-    // Cargar información de descuentos por ventas del día (mantener lógica anterior)
-    try {
-      const { data: dailySales, error: rpcErr } = await supabase.rpc('get_daily_sales_local', {
-        p_branch_id: activeBranch.id,
-        p_day: selectedDate
-      });
-      if (rpcErr) throw rpcErr;
+    let totalCard = sales
+      .filter(s => s.payment_type === 'TARJETA')
+      .reduce((sum, s) => sum + (s.total || 0), 0);
 
-      const ids = (dailySales || []).map((s: any) => s.id);
-      if (ids.length === 0) {
-        setTotalDiscounts(0);
-        setSalesWithDiscounts(0);
-      } else {
-        const { data: discountData, error: discErr } = await supabase
-          .from('sales')
-          .select('id, discount_amount')
-          .eq('branch_id', activeBranch.id)
-          .in('id', ids)
-          .gt('discount_amount', 0);
-        if (discErr) throw discErr;
-
-        if (discountData && discountData.length > 0) {
-          const totalDs = discountData.reduce((sum, sale) => sum + (sale.discount_amount || 0), 0);
-          setTotalDiscounts(totalDs);
-          setSalesWithDiscounts(discountData.length);
-        } else {
-          setTotalDiscounts(0);
-          setSalesWithDiscounts(0);
-        }
-      }
-    } catch (error) {
-      console.log('Descuentos no disponibles:', error);
-      setTotalDiscounts(0);
-      setSalesWithDiscounts(0);
-    }
-
-    // Cargar desglose de pagos mixtos como antes pero filtrando ids del día local
-    try {
-      const { data: dailySales, error: rpcErr } = await supabase.rpc('get_daily_sales_local', {
-        p_branch_id: activeBranch.id,
-        p_day: selectedDate
-      });
-      if (rpcErr) throw rpcErr;
-
-      const ids = (dailySales || []).map((s: any) => s.id);
-      if (ids.length === 0) {
-        setMixedPaymentBreakdown([]);
-        setTotalSalesCash(totalCashWithMixed);
-        setTotalSalesQR(totalQRWithMixed);
-        setTotalSalesCard(totalCardWithMixed);
-      } else {
-        const { data: mixedData, error: mixErr } = await supabase
-          .from('sales')
-          .select('payment_type, payment_details, total')
-          .eq('branch_id', activeBranch.id)
-          .eq('payment_type', 'MIXTO')
-          .in('id', ids);
-        if (mixErr) throw mixErr;
-
-        if (mixedData && mixedData.length > 0) {
-          const breakdown: any[] = [];
-          const methods = ['efectivo', 'qr', 'tarjeta'];
-          
-          let mixedCash = 0;
-          let mixedQR = 0;
-          let mixedCard = 0;
-          
-          methods.forEach(method => {
-            const total = mixedData.reduce((sum, sale) => sum + (sale.payment_details?.[method] || 0), 0);
-            
-            if (total > 0) {
-              breakdown.push({
-                payment_method: method,
-                total_amount: total,
-                transaction_count: mixedData.length
-              });
-            }
-            if (method === 'efectivo') mixedCash = total;
-            if (method === 'qr') mixedQR = total;
-            if (method === 'tarjeta') mixedCard = total;
+    // Procesar pagos mixtos
+    const mixedSales = sales.filter(s => s.payment_type === 'MIXTO');
+    let mixedCash = 0;
+    let mixedQR = 0;
+    let mixedCard = 0;
+    const breakdown: any[] = [];
+    const methods = ['efectivo', 'qr', 'tarjeta'];
+    
+    if (mixedSales.length > 0) {
+      methods.forEach(method => {
+        const total = mixedSales.reduce((sum, sale) => sum + parseFloat(sale.payment_details?.[method] || '0'), 0);
+        
+        if (total > 0) {
+          breakdown.push({
+            payment_method: method,
+            total_amount: total,
+            transaction_count: mixedSales.length
           });
-          
-          setMixedPaymentBreakdown(breakdown);
-
-          // Sumar componentes mixtos a los totales por método
-          totalCashWithMixed += mixedCash;
-          totalQRWithMixed += mixedQR;
-          totalCardWithMixed += mixedCard;
-          setTotalSalesCash(totalCashWithMixed);
-          setTotalSalesQR(totalQRWithMixed);
-          setTotalSalesCard(totalCardWithMixed);
-        } else {
-          setMixedPaymentBreakdown([]);
-          setTotalSalesCash(totalCashWithMixed);
-          setTotalSalesQR(totalQRWithMixed);
-          setTotalSalesCard(totalCardWithMixed);
         }
-      }
-    } catch (error) {
-      console.log('Pagos mixtos no disponibles:', error);
-      setMixedPaymentBreakdown([]);
-      setTotalSalesCash(totalCashWithMixed);
-      setTotalSalesQR(totalQRWithMixed);
-      setTotalSalesCard(totalCardWithMixed);
+        if (method === 'efectivo') mixedCash = total;
+        if (method === 'qr') mixedQR = total;
+        if (method === 'tarjeta') mixedCard = total;
+      });
     }
+
+    setMixedPaymentBreakdown(breakdown);
+
+    // Sumar componentes mixtos a los totales por método
+    totalCash += mixedCash;
+    totalQR += mixedQR;
+    totalCard += mixedCard;
+
+    setTotalSalesCash(totalCash);
+    setTotalSalesQR(totalQR);
+    setTotalSalesCard(totalCard);
+
+    // Número de ventas
+    setNumberOfSales(sales.length);
+
+    // Productos vendidos
+    const saleIds = sales.map(s => s.id);
+    if (saleIds.length > 0) {
+      const { data: saleItems, error: itemsError } = await supabase
+        .from('sale_items')
+        .select('quantity')
+        .in('sale_id', saleIds);
+      
+      if (itemsError) throw itemsError;
+      
+      const totalProducts = (saleItems || []).reduce((sum, item) => sum + (item.quantity || 0), 0);
+      setProductsSold(totalProducts);
+    } else {
+      setProductsSold(0);
+    }
+
+    // Descuentos
+    const totalDiscounts = sales.reduce((sum, s) => sum + (s.discount_amount || 0), 0);
+    const salesWithDiscounts = sales.filter(s => (s.discount_amount || 0) > 0).length;
+    
+    setTotalDiscounts(totalDiscounts);
+    setSalesWithDiscounts(salesWithDiscounts);
 
   } catch (error) {
     console.error('Error loading payment totals:', error);
@@ -220,9 +160,11 @@ const loadTotals = async () => {
   const loadCashFlow = async () => {
     if (!activeBranch) return;
     
+    console.log('Loading cash flow for date:', selectedDate);
     setIsLoadingCashFlow(true);
     try {
       const cashFlow = await cashClosureService.getDailyCashFlow(activeBranch.id, selectedDate);
+      console.log('Cash flow data:', cashFlow);
       setCashFlowData(cashFlow);
     } catch (error) {
       console.error('Error loading cash flow:', error);
@@ -327,6 +269,28 @@ const loadTotals = async () => {
     });
   };
 
+  const formatSaleDate = (saleDateString: string) => {
+    // Crear fecha interpretando correctamente el timestamp de Bolivia
+    const date = new Date(saleDateString);
+    return date.toLocaleDateString('es-ES', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      timeZone: 'America/La_Paz'
+    });
+  };
+
+  const formatSaleTime = (saleDateString: string) => {
+    // Crear fecha interpretando correctamente el timestamp de Bolivia
+    const date = new Date(saleDateString);
+    return date.toLocaleTimeString('es-ES', {
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'America/La_Paz'
+    });
+  };
+
   const handleSaleClick = async (sale: any) => {
     try {
       // Obtener los detalles completos de la venta
@@ -388,20 +352,24 @@ const loadTotals = async () => {
     if (!activeBranch) return;
     
     try {
-      // Obtener ventas del día (zona America/La_Paz) vía RPC y luego enriquecer
-      const { data: dailySales, error: rpcError } = await supabase.rpc('get_daily_sales_local', {
-        p_branch_id: activeBranch.id,
-        p_day: selectedDate
-      });
-      if (rpcError) throw rpcError;
+      // Obtener ventas del día con consulta directa
+      const { data: dailySales, error: salesError } = await supabase
+        .from('sales')
+        .select('*')
+        .eq('branch_id', activeBranch.id)
+        .gte('sale_date', `${selectedDate}T00:00:00-04:00`)
+        .lt('sale_date', `${selectedDate}T23:59:59-04:00`);
 
-      const ids = (dailySales || []).map((s: any) => s.id);
-      if (ids.length === 0) {
+      if (salesError) throw salesError;
+
+      const sales = dailySales || [];
+      if (sales.length === 0) {
         setSalesList([]);
         setShowSalesList(true);
         return;
       }
 
+      const ids = sales.map(s => s.id);
       const { data: detailed, error: qError } = await supabase
         .from('sales')
         .select(`
@@ -432,15 +400,19 @@ const loadTotals = async () => {
     if (!activeBranch) return;
     
     try {
-      // Primero obtener las ventas del día vía RPC (zona local)
-      const { data: dailySales, error: rpcError } = await supabase.rpc('get_daily_sales_local', {
-        p_branch_id: activeBranch.id,
-        p_day: selectedDate
-      });
-      if (rpcError) throw rpcError;
+      // Obtener las ventas del día con consulta directa
+      const { data: dailySales, error: salesError } = await supabase
+        .from('sales')
+        .select('*')
+        .eq('branch_id', activeBranch.id)
+        .gte('sale_date', `${selectedDate}T00:00:00-04:00`)
+        .lt('sale_date', `${selectedDate}T23:59:59-04:00`);
 
-      if (dailySales && dailySales.length > 0) {
-        const saleIds = dailySales.map((sale: any) => sale.id);
+      if (salesError) throw salesError;
+
+      const sales = dailySales || [];
+      if (sales.length > 0) {
+        const saleIds = sales.map(sale => sale.id);
         
         // Luego obtener los items de esas ventas
         const { data: units, error: unitsError } = await supabase
@@ -757,11 +729,7 @@ const loadTotals = async () => {
                           onClick={() => handleSaleClick(sale)}
                         >
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {new Date(sale.sale_date).toLocaleTimeString('es-ES', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                              timeZone: 'America/La_Paz'
-                            })}
+                            {formatSaleTime(sale.sale_date)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                             <div className="flex items-center gap-2">
@@ -977,11 +945,7 @@ const loadTotals = async () => {
                       return {
                         ...t,
                         balance: runningBalance,
-                        time: new Date(t.timestamp).toLocaleTimeString('es-ES', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          timeZone: 'America/La_Paz'
-                        })
+                        time: formatSaleTime(t.timestamp)
                       };
                     });
 
@@ -1103,16 +1067,7 @@ const loadTotals = async () => {
                   <div>
                     <h3 className="text-xl font-bold text-gray-900">Detalles de Venta</h3>
                     <p className="text-sm text-gray-600">
-                      {new Date(selectedSale.sale_date).toLocaleDateString('es-ES', {
-                        weekday: 'long',
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric'
-                      })} - {new Date(selectedSale.sale_date).toLocaleTimeString('es-ES', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        timeZone: 'America/La_Paz'
-                      })}
+                      {formatSaleDate(selectedSale.sale_date)} - {formatSaleTime(selectedSale.sale_date)}
                     </p>
                   </div>
                 </div>
@@ -1295,11 +1250,7 @@ const loadTotals = async () => {
                         <div className="flex-1">
                           <div className="flex items-center gap-4 mb-2">
                             <span className="text-sm font-medium text-gray-600">
-                              {new Date(sale.sale_date).toLocaleTimeString('es-ES', {
-                                hour: '2-digit',
-                                minute: '2-digit',
-                                timeZone: 'America/La_Paz'
-                              })}
+                              {formatSaleTime(sale.sale_date)}
                             </span>
                             <span className="text-sm font-medium text-purple-600">
                               #{sale.id.slice(-8)}
@@ -1400,11 +1351,7 @@ const loadTotals = async () => {
                         </div>
                         <div className="flex items-center gap-2 mt-1">
                           <span className="text-xs text-gray-500">
-                            Venta: {new Date(item.sale?.sale_date).toLocaleTimeString('es-ES', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                              timeZone: 'America/La_Paz'
-                            })}
+                            Venta: {formatSaleTime(item.sale?.sale_date)}
                           </span>
                           <span className="text-xs text-gray-500">
                             Vendedor: {item.sale?.user?.name || 'N/A'}
@@ -1570,7 +1517,7 @@ const generatePrintContent = (report: DailyReport, branch: any, date: string, us
       <div class="header">
         <h1>REPORTE DIARIO DE VENTAS</h1>
         <h2>${branch.name}</h2>
-        <p><strong>Fecha:</strong> ${new Date(date).toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+        <p><strong>Fecha:</strong> ${new Date(date).toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/La_Paz' })}</p>
         <p><strong>Generado por:</strong> ${user?.name || 'Sistema'}</p>
         <p><strong>Fecha de generación:</strong> ${new Date().toLocaleString('es-ES')}</p>
       </div>

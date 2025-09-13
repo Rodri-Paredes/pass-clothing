@@ -32,17 +32,22 @@ export class SalesService {
       }
     }
 
-    // Crear la venta
-    // Generar fecha/hora local de Bolivia con offset explícito (-04:00)
+    // Crear la venta con timestamp correcto de Bolivia
+    // Usar una función más simple y directa
     const now = new Date();
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    const hh = String(now.getHours()).padStart(2, '0');
-    const mi = String(now.getMinutes()).padStart(2, '0');
-    const ss = String(now.getSeconds()).padStart(2, '0');
-    // Representar hora local del cliente como America/La_Paz; Bolivia no usa DST (offset fijo -04:00)
-    const saleDateLaPaz = `${yyyy}-${mm}-${dd}T${hh}:${mi}:${ss}-04:00`;
+    const boliviaTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/La_Paz' }));
+    
+    // Crear timestamp ISO manualmente con offset de Bolivia
+    const year = boliviaTime.getFullYear();
+    const month = String(boliviaTime.getMonth() + 1).padStart(2, '0');
+    const day = String(boliviaTime.getDate()).padStart(2, '0');
+    const hours = String(boliviaTime.getHours()).padStart(2, '0');
+    const minutes = String(boliviaTime.getMinutes()).padStart(2, '0');
+    const seconds = String(boliviaTime.getSeconds()).padStart(2, '0');
+    
+    const saleDateISO = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}-04:00`;
+    
+    console.log('Creating sale with Bolivia time:', saleDateISO);
 
     const saleData: any = {
       user_id: userId,
@@ -50,7 +55,7 @@ export class SalesService {
       subtotal,
       discount_amount: discountAmount,
       total,
-      sale_date: saleDateLaPaz,
+      sale_date: saleDateISO,
       payment_type: paymentType
     };
 

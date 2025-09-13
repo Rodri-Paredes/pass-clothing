@@ -44,12 +44,16 @@ export class CashClosureService {
     totalIncomes: number;
     netFlow: number;
   }> {
-    // Obtener ventas del día con zona horaria local via RPC
+    // Obtener ventas del día con zona horaria local - consulta directa
     const { data: dailySales, error: salesError } = await supabase
-      .rpc('get_daily_sales_local', {
-        p_branch_id: branchId,
-        p_day: date
-      });
+      .from('sales')
+      .select('*')
+      .eq('branch_id', branchId)
+      .gte('sale_date', `${date}T00:00:00-04:00`)
+      .lt('sale_date', `${date}T23:59:59-04:00`)
+      .order('sale_date', { ascending: true });
+
+    console.log('Direct query result:', { dailySales, error: salesError, date, branchId });
 
     if (salesError) throw salesError;
 
@@ -70,30 +74,37 @@ export class CashClosureService {
       salesDetailed = detailed || [];
     }
 
-    // Obtener movimientos de caja del día (solo movimientos manuales, NO ventas) via RPC
+    // Obtener movimientos de caja del día (solo movimientos manuales, NO ventas) - consulta directa
     const { data: cashMovementsBase, error: movementsError } = await supabase
-      .rpc('get_daily_cash_movements_local', {
-        p_branch_id: branchId,
-        p_day: date
-      });
+      .from('cash_movements')
+      .select(`
+        *,
+        cash_registers!inner(branch_id)
+      `)
+      .eq('cash_registers.branch_id', branchId)
+      .is('reference_id', null)
+      .gte('created_at', `${date}T00:00:00-04:00`)
+      .lt('created_at', `${date}T23:59:59-04:00`)
+      .order('created_at', { ascending: true });
 
     if (movementsError) throw movementsError;
 
-    // Enriquecer movimientos con usuario y cash_register (branch)
+    // Enriquecer movimientos con usuario
     let cashMovements: any[] = [];
     if (cashMovementsBase && cashMovementsBase.length > 0) {
-      const movementIds = cashMovementsBase.map((m: any) => m.id);
-      const { data: movementsDetailed, error: movDetailErr } = await supabase
-        .from('cash_movements')
-        .select(`
-          *,
-          user:users(name),
-          cash_register:cash_registers!inner(branch_id)
-        `)
-        .in('id', movementIds)
-        .order('created_at', { ascending: true });
-      if (movDetailErr) throw movDetailErr;
-      cashMovements = movementsDetailed || [];
+      const userIds = [...new Set(cashMovementsBase.map((m: any) => m.user_id))];
+      const { data: users, error: usersError } = await supabase
+        .from('users')
+        .select('id, name')
+        .in('id', userIds);
+      
+      if (usersError) throw usersError;
+      
+      const userMap = new Map(users?.map(u => [u.id, u.name]) || []);
+      cashMovements = cashMovementsBase.map(m => ({
+        ...m,
+        user: { name: userMap.get(m.user_id) || 'Usuario desconocido' }
+      }));
     }
 
     const salesData = salesDetailed || [];
@@ -117,7 +128,8 @@ export class CashClosureService {
       totalExpenses,
       incomes: incomesData.length,
       totalIncomes,
-      netFlow
+      netFlow,
+      salesData: salesData.map(s => ({ id: s.id, sale_date: s.sale_date, total: s.total }))
     });
 
     return {
