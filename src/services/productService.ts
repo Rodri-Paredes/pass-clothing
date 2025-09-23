@@ -12,6 +12,41 @@ export class ProductService {
     if (error) throw error;
     return data;
   }
+
+  async getProductsPaginated(params: {
+    page: number;
+    limit: number;
+    search?: string;
+    category?: string;
+  }): Promise<{ items: Product[]; hasMore: boolean }> {
+    const { page, limit, search, category } = params;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    let query = supabase
+      .from('products')
+      .select(`
+        *,
+        variants:product_variants(*)
+      `)
+      .order('created_at', { ascending: false })
+      .range(from, to);
+
+    if (search && search.trim()) {
+      const term = `%${search.trim()}%`;
+      query = query.or(`name.ilike.${term},description.ilike.${term}`);
+    }
+
+    if (category && category.trim()) {
+      query = query.eq('category', category.trim());
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    const items = (data as Product[]) || [];
+    const hasMore = items.length === limit; // heurística sin count
+    return { items, hasMore };
+  }
   async getProducts(): Promise<Product[]> {
     const { data, error } = await supabase
       .from('products')

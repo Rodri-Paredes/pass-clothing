@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Plus, ShoppingCart, Calendar, Search, Package, Minus, CheckCircle } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
@@ -9,6 +9,7 @@ import { useProductStore } from '../store/productStore';
 import { useSalesStore } from '../store/salesStore';
 import { useAuthStore } from '../store/authStore';
 import { CATEGORIES } from '../lib/constants';
+import { usePaginatedProducts } from '../hooks/usePaginatedProducts';
 
 interface CartItem {
   product: any;
@@ -19,7 +20,7 @@ interface CartItem {
 const SalesPage: React.FC = () => {
   const { sales, loadSalesByBranch, createSale } = useSalesStore();
   const { activeBranch, user } = useAuthStore();
-  const { products, stock, loadProducts, loadStockByBranch } = useProductStore();
+  const { stock, loadStockByBranch } = useProductStore();
   const [showSalesForm, setShowSalesForm] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -29,7 +30,7 @@ const SalesPage: React.FC = () => {
   const [paymentType, setPaymentType] = useState<'QR' | 'EFECTIVO' | 'TARJETA' | 'MIXTO'>('EFECTIVO');
   const [selectedSale, setSelectedSale] = useState<any | null>(null);
   const [discountAmount, setDiscountAmount] = useState<number>(0);
-  const [showMixedPaymentModal, setShowMixedPaymentModal] = useState(false);
+  /* removed unused state: showMixedPaymentModal */
   const [mixedPaymentDetails, setMixedPaymentDetails] = useState({
     efectivo: 0,
     qr: 0,
@@ -41,8 +42,17 @@ const SalesPage: React.FC = () => {
       loadSalesByBranch(activeBranch.id);
       loadStockByBranch(activeBranch.id);
     }
-    loadProducts();
-  }, [activeBranch, loadSalesByBranch, loadProducts, loadStockByBranch]);
+  }, [activeBranch, loadSalesByBranch, loadStockByBranch]);
+
+  const {
+    items,
+    isInitialLoading,
+    isFetchingNextPage,
+    error,
+    hasMore,
+    reload,
+    observerRef
+  } = usePaginatedProducts({ pageSize: 24, search: searchTerm, category: selectedCategory, enabled: true });
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('es-ES', {
@@ -56,17 +66,15 @@ const SalesPage: React.FC = () => {
 
   // Filtrar productos disponibles con stock
   // Adapt availableProducts to filter by variants with stock
-  const availableProducts = products.filter(product => {
-    // At least one variant with stock
-    const hasVariantWithStock = (product.variants || []).some((variant: any) => {
-      const variantStock = stock.find(s => s.variant_id === variant.id);
-      return variantStock && variantStock.quantity > 0;
+  const availableProducts = useMemo(() => {
+    return items.filter(product => {
+      const hasVariantWithStock = (product.variants || []).some((variant: any) => {
+        const variantStock = stock.find(s => s.variant_id === variant.id);
+        return variantStock && variantStock.quantity > 0;
+      });
+      return hasVariantWithStock;
     });
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         product.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = !selectedCategory || product.category === selectedCategory;
-    return hasVariantWithStock && matchesSearch && matchesCategory;
-  });
+  }, [items, stock]);
 
   const handleAddToCart = (product: any) => {
     // product must have variant_id
@@ -197,63 +205,101 @@ const SalesPage: React.FC = () => {
                 </select>
               </div>
 
-              {/* Grid de productos */}
-              {availableProducts.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
-                  {availableProducts.flatMap((product) =>
-                    (product.variants || []).map((variant: any) => {
-                      const variantStock = stock.find(s => s.variant_id === variant.id);
-                      const cartItem = cart.find(item => item.product.id === product.id && item.product.variant_id === variant.id);
-                      return (
-                        <div
-                          key={variant.id}
-                          className="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow cursor-pointer bg-white"
-                          onClick={() => handleAddToCart({ ...product, variant_id: variant.id, size: variant.size, price: product.price })}
-                        >
-                          <div className="aspect-square bg-gray-100 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
-                            {product.image_url ? (
-                              <img
-                                src={product.image_url}
-                                alt={product.name}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <Package className="w-8 h-8 text-gray-400" />
+              {/* Errores y recarga */}
+              {error && (
+                <Card className="p-3 mb-3 bg-red-50 border border-red-200">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-red-700">{error}</span>
+                    <Button size="sm" onClick={reload}>Reintentar</Button>
+                  </div>
+                </Card>
+              )}
+
+              {/* Grid de productos con contenedor estable */}
+              <div className="max-h-96 overflow-y-auto">
+                {isInitialLoading ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <div key={i} className="border border-gray-200 rounded-xl p-4 bg-white">
+                        <div className="aspect-square rounded-lg mb-3 animate-pulse bg-gray-200" />
+                        <div className="h-4 w-3/4 bg-gray-200 rounded animate-pulse mb-2" />
+                        <div className="h-3 w-2/3 bg-gray-200 rounded animate-pulse mb-3" />
+                        <div className="flex justify-between items-center">
+                          <div className="h-4 w-16 bg-gray-200 rounded animate-pulse" />
+                          <div className="h-3 w-20 bg-gray-200 rounded animate-pulse" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : availableProducts.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    {availableProducts.flatMap((product) =>
+                      (product.variants || []).map((variant: any) => {
+                        const variantStock = stock.find(s => s.variant_id === variant.id);
+                        const cartItem = cart.find(item => item.product.id === product.id && item.product.variant_id === variant.id);
+                        return (
+                          <div
+                            key={variant.id}
+                            className="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow cursor-pointer bg-white"
+                            onClick={() => handleAddToCart({ ...product, variant_id: variant.id, size: variant.size, price: product.price })}
+                          >
+                            <div className="aspect-square bg-gray-100 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
+                              {product.image_url ? (
+                                <img
+                                  src={product.image_url}
+                                  alt={product.name}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <Package className="w-8 h-8 text-gray-400" />
+                              )}
+                            </div>
+                            <h3 className="font-semibold text-gray-900 text-sm mb-1 truncate">
+                              {product.name}
+                            </h3>
+                            <p className="text-xs text-gray-600 mb-2">{product.category} - Talla: {variant.size}</p>
+                            <div className="flex justify-between items-center">
+                              <span className="font-bold text-blue-600">
+                                ${product.price.toFixed(2)}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                Stock: {variantStock?.quantity || 0}
+                              </span>
+                            </div>
+                            {cartItem && (
+                              <div className="mt-2 text-xs text-green-600 font-medium">
+                                En carrito: {cartItem.quantity}
+                              </div>
                             )}
                           </div>
-                          <h3 className="font-semibold text-gray-900 text-sm mb-1 truncate">
-                            {product.name}
-                          </h3>
-                          <p className="text-xs text-gray-600 mb-2">{product.category} - Talla: {variant.size}</p>
-                          <div className="flex justify-between items-center">
-                            <span className="font-bold text-blue-600">
-                              ${product.price.toFixed(2)}
-                            </span>
-                            <span className="text-xs text-gray-500">
-                              Stock: {variantStock?.quantity || 0}
-                            </span>
-                          </div>
-                          {cartItem && (
-                            <div className="mt-2 text-xs text-green-600 font-medium">
-                              En carrito: {cartItem.quantity}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-gray-500">
-                  <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No hay productos disponibles</p>
-                  {searchTerm || selectedCategory ? (
-                    <p className="text-sm">Intenta cambiar los filtros</p>
-                  ) : (
-                    <p className="text-sm">No hay productos con stock en esta sucursal</p>
-                  )}
-                </div>
-              )}
+                        );
+                      })
+                    )}
+                    {/* Sentinel dentro del grid para evitar saltos visuales */}
+                    {hasMore && (
+                      <div className="col-span-full"><div ref={(el) => el && observerRef(el)} className="h-4" /></div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No hay productos disponibles</p>
+                    {searchTerm || selectedCategory ? (
+                      <p className="text-sm">Intenta cambiar los filtros</p>
+                    ) : (
+                      <p className="text-sm">No hay productos con stock en esta sucursal</p>
+                    )}
+                  </div>
+                )}
+                {/* Indicador de carga incremental fijo al final */}
+                {!isInitialLoading && isFetchingNextPage && (
+                  <div className="py-3 text-center">
+                    <div className="mx-auto h-2 w-24 bg-gray-200 rounded overflow-hidden">
+                      <div className="h-full w-1/2 bg-gray-400 animate-pulse" />
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </Card>
         </div>

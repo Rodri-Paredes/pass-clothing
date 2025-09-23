@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Plus, Search, Edit, Trash2, Package } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -8,25 +8,27 @@ import ProductForm from '../components/products/ProductForm';
 import { useProductStore } from '../store/productStore';
 import { useAuthStore } from '../store/authStore';
 import { CATEGORIES } from '../lib/constants';
+import { usePaginatedProducts } from '../hooks/usePaginatedProducts';
 
 const ProductsPage: React.FC = () => {
-  const { products, loadProducts, deleteProduct } = useProductStore();
-  const { activeBranch, user } = useAuthStore();
+  const { deleteProduct } = useProductStore();
+  const { user } = useAuthStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [showProductForm, setShowProductForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
 
-  useEffect(() => {
-    loadProducts();
-  }, [loadProducts]);
+  const {
+    items,
+    isInitialLoading,
+    isFetchingNextPage,
+    error,
+    hasMore,
+    reload,
+    observerRef
+  } = usePaginatedProducts({ pageSize: 20, search: searchTerm, category: selectedCategory, enabled: true });
 
-  const filteredProducts = products.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         product.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = !selectedCategory || product.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
+  const filteredProducts = useMemo(() => items, [items]);
 
   const handleDelete = async (id: string) => {
     if (window.confirm('¿Estás seguro de que quieres eliminar este producto?')) {
@@ -91,6 +93,15 @@ const ProductsPage: React.FC = () => {
       </Card>
 
       {/* Products Grid */}
+      {error && (
+        <Card className="p-4 bg-red-50 border border-red-200">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-red-700">{error}</span>
+            <Button size="sm" onClick={reload}>Reintentar</Button>
+          </div>
+        </Card>
+      )}
+
       {filteredProducts.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredProducts.map((product) => (
@@ -171,6 +182,17 @@ const ProductsPage: React.FC = () => {
             </Button>
           )}
         </Card>
+      )}
+
+      {/* Loading states */}
+      {isInitialLoading && (
+        <Card className="p-4 text-center">Cargando productos...</Card>
+      )}
+      {!isInitialLoading && isFetchingNextPage && (
+        <Card className="p-4 text-center">Cargando más...</Card>
+      )}
+      {!isInitialLoading && hasMore && (
+        <div ref={(el) => el && observerRef(el)} className="h-4" />
       )}
 
       {/* Product Form Modal */}
