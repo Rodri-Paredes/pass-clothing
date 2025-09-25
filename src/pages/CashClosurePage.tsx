@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Calendar, Printer, DollarSign, ShoppingCart, TrendingUp, FileText, Download, BarChart3, CreditCard, QrCode, Wallet, Percent, Users, Plus } from 'lucide-react';
+import { Calendar, Printer, DollarSign, ShoppingCart, FileText, Download, BarChart3, CreditCard, QrCode, Wallet, Percent, Users, Plus } from 'lucide-react';
 import Button from '../components/ui/Button';
-import Card from '../components/ui/Card';
+// import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
 import { useAuthStore } from '../store/authStore';
 import { useSalesStore } from '../store/salesStore';
@@ -13,7 +13,7 @@ import { supabase } from '../lib/supabase';
 
 const CashClosurePage: React.FC = () => {
   const { activeBranch, user } = useAuthStore();
-  const { sales } = useSalesStore();
+  const { } = useSalesStore();
   const getLocalDateString = () => {
     // Obtener fecha actual en zona horaria de Bolivia y formatearla a yyyy-mm-dd
     const laPazNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/La_Paz' }));
@@ -221,14 +221,25 @@ const loadTotals = async () => {
 
   const handlePrintReport = () => {
     if (!dailyReport || !activeBranch) return;
-    
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
-
     const printContent = generatePrintContent(dailyReport, activeBranch, selectedDate, user);
+    printWindow.document.open();
     printWindow.document.write(printContent);
     printWindow.document.close();
-    printWindow.print();
+    // Asegurar que imprima cuando el contenido esté listo (evita página en blanco)
+    const tryPrint = () => {
+      try {
+        printWindow.focus();
+        printWindow.print();
+        printWindow.close();
+      } catch (_) {
+        // fallback: reintentar brevemente
+        setTimeout(tryPrint, 150);
+      }
+    };
+    printWindow.onload = tryPrint;
+    setTimeout(tryPrint, 300);
   };
 
   const handleDownloadReport = async () => {
@@ -236,16 +247,22 @@ const loadTotals = async () => {
     
     setIsGeneratingReport(true);
     try {
-      const csvContent = generateCSVContent(dailyReport);
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const csvContent = generateCSVContent(dailyReport, { branchName: activeBranch.name, date: selectedDate });
+      // Agregar BOM para compatibilidad con Excel y acentos
+      const BOM = '\uFEFF';
+      const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
       link.setAttribute('href', url);
       link.setAttribute('download', `reporte-diario-${selectedDate}-${activeBranch.name}.csv`);
       link.style.visibility = 'hidden';
       document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      // Algunos navegadores requieren un delay mínimo
+      setTimeout(() => {
+        link.click();
+        URL.revokeObjectURL(url);
+        document.body.removeChild(link);
+      }, 0);
     } catch (error) {
       console.error('Error generating CSV:', error);
     } finally {
@@ -294,39 +311,7 @@ const loadTotals = async () => {
     });
   };
 
-  const handleSaleClick = async (sale: any) => {
-    try {
-      // Obtener los detalles completos de la venta
-      const { data: saleDetails, error } = await supabase
-        .from('sales')
-        .select(`
-          *,
-          sale_items (
-            *,
-            variant:product_variants (
-              *,
-              product:products (
-                name,
-                description,
-                price,
-                image_url
-              )
-            )
-          ),
-          user:users (name),
-          branch:branches (name)
-        `)
-        .eq('id', sale.id)
-        .single();
-
-      if (error) throw error;
-      
-      setSelectedSale(saleDetails);
-      setShowSaleDetails(true);
-    } catch (error) {
-      console.error('Error loading sale details:', error);
-    }
-  };
+  // removed unused handleSaleClick
 
   const getProductNames = (sale: any) => {
     if (!sale.sale_items || sale.sale_items.length === 0) {
@@ -1619,7 +1604,27 @@ const generatePrintContent = (report: DailyReport, branch: any, date: string, us
 };
 
 // Función para generar contenido CSV
-const generateCSVContent = (report: DailyReport) => {
+const generateCSVContent = (report: DailyReport, meta?: { branchName?: string; date?: string }) => {
+  // Utilidad para escapar valores CSV (comas, comillas, saltos de línea)
+  const esc = (val: any) => {
+    const s = String(val ?? '');
+    if (/[",\n]/.test(s)) {
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  };
+
+  const headLines: string[] = [];
+  if (meta?.branchName || meta?.date) {
+    headLines.push(`Reporte Diario,${esc(meta?.branchName || '')},${esc(meta?.date || '')}`);
+  }
+  // Sumarizador
+  headLines.push(`Total Ventas,${report.totalSales}`);
+  headLines.push(`Número de Ventas,${report.numberOfSales}`);
+  headLines.push(`Venta Promedio,${report.averageSale}`);
+  headLines.push(`Productos Vendidos,${report.totalItemsSold}`);
+  headLines.push('');
+
   const headers = ['Hora', 'Venta #', 'Vendedor', 'Artículos', 'Total'];
   const rows = report.sales.map(sale => [
     new Date(sale.sale_date).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
@@ -1630,8 +1635,9 @@ const generateCSVContent = (report: DailyReport) => {
   ]);
 
   const csvContent = [
+    ...headLines,
     headers.join(','),
-    ...rows.map(row => row.join(','))
+    ...rows.map(row => row.map(esc).join(','))
   ].join('\n');
 
   return csvContent;

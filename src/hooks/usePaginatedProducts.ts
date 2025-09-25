@@ -30,11 +30,26 @@ export function usePaginatedProducts(params: UsePaginatedProductsParams = {}): U
   const [isInitialLoading, setIsInitialLoading] = useState<boolean>(false);
   const [isFetchingNextPage, setIsFetchingNextPage] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
+  const [debouncedCategory, setDebouncedCategory] = useState(category);
 
-  const searchRef = useRef(search);
-  const categoryRef = useRef(category);
+  // Debounce search term
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
-  const loadPage = useCallback(async (targetPage: number, replace: boolean = false) => {
+  // Debounce category
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedCategory(category);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [category]);
+
+  const loadPage = useCallback(async (targetPage: number, replace: boolean = false, currentSearch?: string, currentCategory?: string) => {
     if (!enabled) return;
     try {
       if (targetPage === 1 && replace) {
@@ -44,23 +59,41 @@ export function usePaginatedProducts(params: UsePaginatedProductsParams = {}): U
       }
       setError(null);
 
+      const searchTerm = currentSearch !== undefined ? currentSearch : debouncedSearch;
+      const categoryFilter = currentCategory !== undefined ? currentCategory : debouncedCategory;
+
+      console.log('🔍 [usePaginatedProducts] Cargando página:', { 
+        targetPage, 
+        replace, 
+        searchTerm, 
+        categoryFilter, 
+        debouncedSearch, 
+        debouncedCategory 
+      });
+
       const { items: pageItems, hasMore: pageHasMore } = await productService.getProductsPaginated({
         page: targetPage,
         limit: pageSize,
-        search: searchRef.current,
-        category: categoryRef.current
+        search: searchTerm,
+        category: categoryFilter
+      });
+
+      console.log('📊 [usePaginatedProducts] Página cargada:', { 
+        pageItems: pageItems.length, 
+        hasMore: pageHasMore 
       });
 
       setItems(prev => (replace ? pageItems : [...prev, ...pageItems]));
       setHasMore(pageHasMore);
       setPage(targetPage);
     } catch (e: any) {
+      console.error('❌ [usePaginatedProducts] Error:', e);
       setError(e?.message || 'Error cargando productos');
     } finally {
       setIsInitialLoading(false);
       setIsFetchingNextPage(false);
     }
-  }, [enabled, pageSize]);
+  }, [enabled, pageSize, debouncedSearch, debouncedCategory]);
 
   const reload = useCallback(() => {
     loadPage(1, true);
@@ -72,11 +105,9 @@ export function usePaginatedProducts(params: UsePaginatedProductsParams = {}): U
   }, [isInitialLoading, isFetchingNextPage, hasMore, loadPage, page]);
 
   const resetAndRefetch = useCallback((opts?: { search?: string; category?: string }) => {
-    if (opts?.search !== undefined) searchRef.current = opts.search;
-    if (opts?.category !== undefined) categoryRef.current = opts.category;
     setItems([]);
     setHasMore(true);
-    loadPage(1, true);
+    loadPage(1, true, opts?.search, opts?.category);
   }, [loadPage]);
 
   // initial load
@@ -85,6 +116,14 @@ export function usePaginatedProducts(params: UsePaginatedProductsParams = {}): U
     loadPage(1, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled]);
+
+  // reset when debounced search or category changes
+  useEffect(() => {
+    if (!enabled) return;
+    setItems([]);
+    setHasMore(true);
+    loadPage(1, true);
+  }, [debouncedSearch, debouncedCategory, enabled, loadPage]);
 
   // intersection observer for infinite scroll
   const observer = useRef<IntersectionObserver | null>(null);

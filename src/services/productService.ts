@@ -20,6 +20,8 @@ export class ProductService {
     category?: string;
   }): Promise<{ items: Product[]; hasMore: boolean }> {
     const { page, limit, search, category } = params;
+    console.log('🔍 [ProductService] Búsqueda de productos:', { page, limit, search, category });
+    
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
@@ -34,16 +36,23 @@ export class ProductService {
 
     if (search && search.trim()) {
       const term = `%${search.trim()}%`;
+      console.log('🔍 [ProductService] Aplicando filtro de búsqueda:', term);
       query = query.or(`name.ilike.${term},description.ilike.${term}`);
     }
 
     if (category && category.trim()) {
+      console.log('🔍 [ProductService] Aplicando filtro de categoría:', category);
       query = query.eq('category', category.trim());
     }
 
     const { data, error } = await query;
-    if (error) throw error;
+    if (error) {
+      console.error('❌ [ProductService] Error en consulta:', error);
+      throw error;
+    }
+    
     const items = (data as Product[]) || [];
+    console.log('📊 [ProductService] Productos encontrados:', items.length);
     const hasMore = items.length === limit; // heurística sin count
     return { items, hasMore };
   }

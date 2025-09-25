@@ -52,7 +52,12 @@ const SalesPage: React.FC = () => {
     hasMore,
     reload,
     observerRef
-  } = usePaginatedProducts({ pageSize: 24, search: searchTerm, category: selectedCategory, enabled: true });
+  } = usePaginatedProducts({ 
+    pageSize: 24, 
+    search: searchTerm, 
+    category: selectedCategory, 
+    enabled: true 
+  });
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('es-ES', {

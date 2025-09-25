@@ -26,7 +26,12 @@ const ProductsPage: React.FC = () => {
     hasMore,
     reload,
     observerRef
-  } = usePaginatedProducts({ pageSize: 20, search: searchTerm, category: selectedCategory, enabled: true });
+  } = usePaginatedProducts({ 
+    pageSize: 20, 
+    search: searchTerm, 
+    category: selectedCategory, 
+    enabled: true 
+  });
 
   const filteredProducts = useMemo(() => items, [items]);
 
