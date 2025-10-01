@@ -56,7 +56,8 @@ const SalesPage: React.FC = () => {
     pageSize: 24, 
     search: searchTerm, 
     category: selectedCategory, 
-    enabled: true 
+    enabled: true,
+    includeHidden: false // Solo mostrar productos visibles en ventas
   });
 
   const formatDate = (dateString: string) => {

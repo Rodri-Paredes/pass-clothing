@@ -11,6 +11,7 @@ interface ProductFormData {
   description: string;
   category: string;
   price: number;
+  is_visible: boolean;
   variants: Array<{
     id?: string; // ID opcional para variantes existentes
     size: string;
@@ -39,6 +40,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
       description: product.description,
       category: product.category,
       price: product.price ?? 0,
+      is_visible: product.is_visible ?? true,
       variants: product.variants?.map((variant: any) => ({
         size: variant.size,
         stock: branches.reduce((acc: any, branch: any) => {
@@ -48,6 +50,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
       })) || []
     } : { 
       price: 0,
+      is_visible: true,
       variants: [{ size: '', stock: branches.reduce((acc, branch) => { acc[branch.id] = 0; return acc; }, {} as { [branchId: string]: number }) }] 
     }
   });
@@ -156,7 +159,8 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
         description: data.description,
         category: data.category,
         image_url: imageUrl,
-        price: data.price
+        price: data.price,
+        is_visible: data.is_visible
       };
       
       let savedProduct;
@@ -342,6 +346,23 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
           {errors.price && (
             <p className="text-sm text-red-600 mt-1">{errors.price.message}</p>
           )}
+        </div>
+
+        {/* Visibility */}
+        <div>
+          <label className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              {...register('is_visible')}
+              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="text-sm font-medium text-gray-700">
+              Producto visible en la tienda
+            </span>
+          </label>
+          <p className="text-xs text-gray-500 mt-1">
+            Si está desmarcado, el producto no aparecerá en las ventas ni en la lista principal
+          </p>
         </div>
 
         {/* Variants */}

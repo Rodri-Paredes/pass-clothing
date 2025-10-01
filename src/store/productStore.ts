@@ -7,7 +7,7 @@ interface ProductState {
   products: Product[];
   stock: Stock[];
   isLoading: boolean;
-  loadProducts: () => Promise<void>;
+  loadProducts: (includeHidden?: boolean) => Promise<void>;
   loadStockByBranch: (branchId: string) => Promise<void>;
   createProduct: (product: Omit<Product, 'id' | 'created_at'>) => Promise<Product>;
   updateProduct: (id: string, updates: Partial<Product>) => Promise<void>;
@@ -17,6 +17,8 @@ interface ProductState {
   uploadImage: (file: File) => Promise<string>;
   getStockByProduct: (variantId: string) => Promise<Stock[]>;
   verifyStockIntegrity: (variantId: string, expectedStock: { [branchId: string]: number }) => Promise<any>;
+  toggleProductVisibility: (productId: string) => Promise<boolean>;
+  updateProductVisibility: (productId: string, isVisible: boolean) => Promise<boolean>;
 }
 
 export const useProductStore = create<ProductState>((set, get) => ({
@@ -24,10 +26,10 @@ export const useProductStore = create<ProductState>((set, get) => ({
   stock: [],
   isLoading: false,
 
-  loadProducts: async () => {
+  loadProducts: async (includeHidden: boolean = false) => {
     set({ isLoading: true });
     try {
-      const products = await productService.getProducts();
+      const products = await productService.getProducts(includeHidden);
       set({ products, isLoading: false });
     } catch (error) {
       set({ isLoading: false });
@@ -87,5 +89,25 @@ export const useProductStore = create<ProductState>((set, get) => ({
 
   verifyStockIntegrity: async (variantId: string, expectedStock: { [branchId: string]: number }) => {
     return await productService.verifyStockIntegrity(variantId, expectedStock);
+  },
+
+  toggleProductVisibility: async (productId: string) => {
+    const newVisibility = await productService.toggleProductVisibility(productId);
+    set(state => ({
+      products: state.products.map(p => 
+        p.id === productId ? { ...p, is_visible: newVisibility } : p
+      )
+    }));
+    return newVisibility;
+  },
+
+  updateProductVisibility: async (productId: string, isVisible: boolean) => {
+    const newVisibility = await productService.updateProductVisibility(productId, isVisible);
+    set(state => ({
+      products: state.products.map(p => 
+        p.id === productId ? { ...p, is_visible: newVisibility } : p
+      )
+    }));
+    return newVisibility;
   }
 }));

@@ -18,9 +18,10 @@ export class ProductService {
     limit: number;
     search?: string;
     category?: string;
+    includeHidden?: boolean;
   }): Promise<{ items: Product[]; hasMore: boolean }> {
-    const { page, limit, search, category } = params;
-    console.log('🔍 [ProductService] Búsqueda de productos:', { page, limit, search, category });
+    const { page, limit, search, category, includeHidden = false } = params;
+    console.log('🔍 [ProductService] Búsqueda de productos:', { page, limit, search, category, includeHidden });
     
     const from = (page - 1) * limit;
     const to = from + limit - 1;
@@ -33,6 +34,11 @@ export class ProductService {
       `)
       .order('created_at', { ascending: false })
       .range(from, to);
+
+    // Filtrar por visibilidad si no se incluyen productos ocultos
+    if (!includeHidden) {
+      query = query.eq('is_visible', true);
+    }
 
     if (search && search.trim()) {
       const term = `%${search.trim()}%`;
@@ -56,8 +62,8 @@ export class ProductService {
     const hasMore = items.length === limit; // heurística sin count
     return { items, hasMore };
   }
-  async getProducts(): Promise<Product[]> {
-    const { data, error } = await supabase
+  async getProducts(includeHidden: boolean = false): Promise<Product[]> {
+    let query = supabase
       .from('products')
       .select(`
         *,
@@ -65,6 +71,12 @@ export class ProductService {
       `)
       .order('created_at', { ascending: false });
 
+    // Filtrar por visibilidad si no se incluyen productos ocultos
+    if (!includeHidden) {
+      query = query.eq('is_visible', true);
+    }
+
+    const { data, error } = await query;
     if (error) throw error;
     return data || [];
   }
@@ -107,12 +119,69 @@ export class ProductService {
   }
 
   async deleteProduct(id: string): Promise<void> {
-    const { error } = await supabase
-      .from('products')
-      .delete()
-      .eq('id', id);
+    console.log(`🗑️ [ProductService] Iniciando eliminación de producto: ${id}`);
+    
+    try {
+      // 1. Obtener información del producto antes de eliminarlo
+      const { data: product, error: fetchError } = await supabase
+        .from('products')
+        .select('*')
+        .eq('id', id)
+        .single();
 
-    if (error) throw error;
+      if (fetchError) {
+        console.error('❌ [ProductService] Error obteniendo producto:', fetchError);
+        throw fetchError;
+      }
+
+      if (!product) {
+        throw new Error('Producto no encontrado');
+      }
+
+      console.log(`📦 [ProductService] Producto encontrado: ${product.name}`);
+
+      // 2. Eliminar imagen del storage si existe
+      if (product.image_url) {
+        try {
+          // Extraer el nombre del archivo de la URL
+          const fileName = product.image_url.split('/').pop();
+          if (fileName) {
+            console.log(`🖼️ [ProductService] Eliminando imagen: ${fileName}`);
+            
+            const { error: deleteImageError } = await supabase.storage
+              .from('products')
+              .remove([fileName]);
+
+            if (deleteImageError) {
+              console.warn('⚠️ [ProductService] No se pudo eliminar la imagen:', deleteImageError);
+              // No lanzar error, solo registrar warning
+            } else {
+              console.log(`✅ [ProductService] Imagen eliminada exitosamente: ${fileName}`);
+            }
+          }
+        } catch (imageError) {
+          console.warn('⚠️ [ProductService] Error eliminando imagen:', imageError);
+          // No lanzar error, solo registrar warning
+        }
+      }
+
+      // 3. Eliminar el producto (esto debería eliminar en cascada las variantes y stock)
+      const { error: deleteError } = await supabase
+        .from('products')
+        .delete()
+        .eq('id', id);
+
+      if (deleteError) {
+        console.error('❌ [ProductService] Error eliminando producto:', deleteError);
+        throw deleteError;
+      }
+
+      console.log(`✅ [ProductService] Producto eliminado exitosamente: ${product.name}`);
+
+    } catch (error) {
+      console.error('❌ [ProductService] Error en eliminación de producto:', error);
+      throw error;
+    }
   }
 
   async getStockByBranch(branchId: string): Promise<Stock[]> {
@@ -230,6 +299,39 @@ export class ProductService {
       .getPublicUrl(fileName);
 
     return data.publicUrl;
+  }
+
+  async toggleProductVisibility(productId: string): Promise<boolean> {
+    console.log(`👁️ [ProductService] Alternando visibilidad del producto: ${productId}`);
+    
+    const { data, error } = await supabase.rpc('toggle_product_visibility', {
+      product_id: productId
+    });
+
+    if (error) {
+      console.error('❌ [ProductService] Error alternando visibilidad:', error);
+      throw error;
+    }
+
+    console.log(`✅ [ProductService] Visibilidad actualizada: ${data}`);
+    return data;
+  }
+
+  async updateProductVisibility(productId: string, isVisible: boolean): Promise<boolean> {
+    console.log(`👁️ [ProductService] Actualizando visibilidad del producto: ${productId} a ${isVisible}`);
+    
+    const { data, error } = await supabase.rpc('update_product_visibility', {
+      product_id: productId,
+      visible: isVisible
+    });
+
+    if (error) {
+      console.error('❌ [ProductService] Error actualizando visibilidad:', error);
+      throw error;
+    }
+
+    console.log(`✅ [ProductService] Visibilidad actualizada: ${data}`);
+    return data;
   }
 
   // Función para verificar la integridad de los datos de stock

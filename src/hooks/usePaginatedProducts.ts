@@ -7,6 +7,7 @@ interface UsePaginatedProductsParams {
   search?: string;
   category?: string;
   enabled?: boolean;
+  includeHidden?: boolean;
 }
 
 interface UsePaginatedProductsResult {
@@ -22,7 +23,7 @@ interface UsePaginatedProductsResult {
 }
 
 export function usePaginatedProducts(params: UsePaginatedProductsParams = {}): UsePaginatedProductsResult {
-  const { pageSize = 20, search = '', category = '', enabled = true } = params;
+  const { pageSize = 20, search = '', category = '', enabled = true, includeHidden = false } = params;
 
   const [page, setPage] = useState<number>(1);
   const [items, setItems] = useState<Product[]>([]);
@@ -75,7 +76,8 @@ export function usePaginatedProducts(params: UsePaginatedProductsParams = {}): U
         page: targetPage,
         limit: pageSize,
         search: searchTerm,
-        category: categoryFilter
+        category: categoryFilter,
+        includeHidden
       });
 
       console.log('📊 [usePaginatedProducts] Página cargada:', { 
@@ -93,7 +95,7 @@ export function usePaginatedProducts(params: UsePaginatedProductsParams = {}): U
       setIsInitialLoading(false);
       setIsFetchingNextPage(false);
     }
-  }, [enabled, pageSize, debouncedSearch, debouncedCategory]);
+  }, [enabled, pageSize, debouncedSearch, debouncedCategory, includeHidden]);
 
   const reload = useCallback(() => {
     loadPage(1, true);

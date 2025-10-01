@@ -22,6 +22,7 @@ export interface Product {
   category: string;
   price: number;
   image_url?: string;
+  is_visible: boolean;
   created_at: string;
   variants?: ProductVariant[];
 }

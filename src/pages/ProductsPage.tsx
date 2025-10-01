@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Plus, Search, Edit, Trash2, Package } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Package, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import Card from '../components/ui/Card';
@@ -11,12 +11,15 @@ import { CATEGORIES } from '../lib/constants';
 import { usePaginatedProducts } from '../hooks/usePaginatedProducts';
 
 const ProductsPage: React.FC = () => {
-  const { deleteProduct } = useProductStore();
+  const { deleteProduct, toggleProductVisibility } = useProductStore();
   const { user } = useAuthStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [showProductForm, setShowProductForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+  const [showHiddenProducts, setShowHiddenProducts] = useState(false);
+  const [showVisibilityModal, setShowVisibilityModal] = useState(false);
+  const [productToToggle, setProductToToggle] = useState<any>(null);
 
   const {
     items,
@@ -30,17 +33,31 @@ const ProductsPage: React.FC = () => {
     pageSize: 20, 
     search: searchTerm, 
     category: selectedCategory, 
-    enabled: true 
+    enabled: true,
+    includeHidden: showHiddenProducts
   });
 
   const filteredProducts = useMemo(() => items, [items]);
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('¿Estás seguro de que quieres eliminar este producto?')) {
+    if (window.confirm('¿Estás seguro de que quieres eliminar este producto? Esta acción no se puede deshacer y eliminará todas las variantes y stock asociados.')) {
       try {
+        console.log(`🗑️ [ProductsPage] Iniciando eliminación de producto: ${id}`);
         await deleteProduct(id);
-      } catch (error) {
-        console.error('Error deleting product:', error);
+        console.log(`✅ [ProductsPage] Producto eliminado exitosamente: ${id}`);
+        
+        // Mostrar notificación de éxito
+        alert('Producto eliminado exitosamente');
+        
+        // Recargar la lista de productos
+        reload();
+        
+      } catch (error: any) {
+        console.error('❌ [ProductsPage] Error eliminando producto:', error);
+        
+        // Mostrar mensaje de error más específico
+        const errorMessage = error?.message || 'Error desconocido al eliminar el producto';
+        alert(`Error al eliminar el producto: ${errorMessage}`);
       }
     }
   };
@@ -53,6 +70,31 @@ const ProductsPage: React.FC = () => {
   const handleCloseForm = () => {
     setShowProductForm(false);
     setEditingProduct(null);
+  };
+
+  const handleToggleVisibilityClick = (product: any) => {
+    setProductToToggle(product);
+    setShowVisibilityModal(true);
+  };
+
+  const handleConfirmVisibilityToggle = async () => {
+    if (!productToToggle) return;
+    
+    try {
+      await toggleProductVisibility(productToToggle.id);
+      // Recargar la lista para reflejar los cambios
+      reload();
+      setShowVisibilityModal(false);
+      setProductToToggle(null);
+    } catch (error: any) {
+      console.error('Error cambiando visibilidad:', error);
+      alert(`Error al cambiar la visibilidad: ${error?.message || 'Error desconocido'}`);
+    }
+  };
+
+  const handleCancelVisibilityToggle = () => {
+    setShowVisibilityModal(false);
+    setProductToToggle(null);
   };
 
   return (
@@ -94,6 +136,19 @@ const ProductsPage: React.FC = () => {
               <option key={category} value={category}>{category}</option>
             ))}
           </select>
+          {user?.role === 'admin' && (
+            <div className="flex items-center space-x-2">
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showHiddenProducts}
+                  onChange={(e) => setShowHiddenProducts(e.target.checked)}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700">Mostrar productos ocultos</span>
+              </label>
+            </div>
+          )}
         </div>
       </Card>
 
@@ -126,7 +181,14 @@ const ProductsPage: React.FC = () => {
               </div>
               
               <div className="space-y-2">
-                <h3 className="font-semibold text-gray-900 truncate">{product.name}</h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-gray-900 truncate">{product.name}</h3>
+                  {!product.is_visible && (
+                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
+                      Oculto
+                    </span>
+                  )}
+                </div>
                 <p className="text-sm text-gray-600 line-clamp-2">{product.description}</p>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-500">{product.category}</span>
@@ -149,6 +211,19 @@ const ProductsPage: React.FC = () => {
                   <div className="flex space-x-2">
                     {user?.role === 'admin' && (
                       <>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleToggleVisibilityClick(product)}
+                          title={product.is_visible ? 'Ocultar producto' : 'Mostrar producto'}
+                          className={product.is_visible ? 'text-green-600 hover:text-green-700' : 'text-gray-400 hover:text-gray-600'}
+                        >
+                          {product.is_visible ? (
+                            <Eye className="h-4 w-4" />
+                          ) : (
+                            <EyeOff className="h-4 w-4" />
+                          )}
+                        </Button>
                         <Button
                           size="sm"
                           variant="ghost"
@@ -199,6 +274,108 @@ const ProductsPage: React.FC = () => {
       {!isInitialLoading && hasMore && (
         <div ref={(el) => el && observerRef(el)} className="h-4" />
       )}
+
+      {/* Visibility Confirmation Modal */}
+      <Modal
+        isOpen={showVisibilityModal}
+        onClose={handleCancelVisibilityToggle}
+        title="Confirmar cambio de visibilidad"
+        size="md"
+      >
+        {productToToggle && (
+          <div className="p-6">
+            <div className="flex items-center mb-4">
+              <div className="flex-shrink-0">
+                <AlertTriangle className="h-8 w-8 text-orange-500" />
+              </div>
+              <div className="ml-3">
+                <h3 className="text-lg font-medium text-gray-900">
+                  ¿Estás seguro de que quieres {productToToggle.is_visible ? 'ocultar' : 'mostrar'} este producto?
+                </h3>
+              </div>
+            </div>
+            
+            <div className="bg-gray-50 rounded-lg p-4 mb-6">
+              <div className="flex items-center space-x-4">
+                {productToToggle.image_url && (
+                  <img
+                    src={productToToggle.image_url}
+                    alt={productToToggle.name}
+                    className="w-16 h-16 object-cover rounded-lg"
+                  />
+                )}
+                <div>
+                  <h4 className="font-semibold text-gray-900">{productToToggle.name}</h4>
+                  <p className="text-sm text-gray-600">{productToToggle.category}</p>
+                  <p className="text-sm text-gray-500">Precio: ${productToToggle.price.toFixed(2)}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  {productToToggle.is_visible ? (
+                    <EyeOff className="h-5 w-5 text-blue-600" />
+                  ) : (
+                    <Eye className="h-5 w-5 text-blue-600" />
+                  )}
+                </div>
+                <div className="ml-3">
+                  <h4 className="text-sm font-medium text-blue-800">
+                    {productToToggle.is_visible ? 'Al ocultar el producto:' : 'Al mostrar el producto:'}
+                  </h4>
+                  <div className="mt-2 text-sm text-blue-700">
+                    {productToToggle.is_visible ? (
+                      <ul className="list-disc list-inside space-y-1">
+                        <li>No aparecerá en el punto de venta</li>
+                        <li>No se podrá vender hasta que se muestre nuevamente</li>
+                        <li>Permanecerá en la gestión de productos</li>
+                        <li>Se puede mostrar nuevamente cuando sea necesario</li>
+                      </ul>
+                    ) : (
+                      <ul className="list-disc list-inside space-y-1">
+                        <li>Aparecerá nuevamente en el punto de venta</li>
+                        <li>Estará disponible para ventas</li>
+                        <li>Será visible para todos los vendedores</li>
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-3">
+              <Button
+                variant="ghost"
+                onClick={handleCancelVisibilityToggle}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleConfirmVisibilityToggle}
+                className={
+                  productToToggle.is_visible 
+                    ? 'bg-orange-600 hover:bg-orange-700 text-white' 
+                    : 'bg-green-600 hover:bg-green-700 text-white'
+                }
+              >
+                {productToToggle.is_visible ? (
+                  <>
+                    <EyeOff className="h-4 w-4 mr-2" />
+                    Sí, ocultar producto
+                  </>
+                ) : (
+                  <>
+                    <Eye className="h-4 w-4 mr-2" />
+                    Sí, mostrar producto
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* Product Form Modal */}
       {user?.role === 'admin' && (
