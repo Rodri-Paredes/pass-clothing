@@ -5,12 +5,12 @@ import LoginPage from './pages/LoginPage';
 import BranchSelectionPage from './pages/BranchSelectionPage';
 import DashboardPage from './pages/DashboardPage';
 import ProductsPage from './pages/ProductsPage';
+import DropsPage from './pages/DropsPage';
 import SalesPage from './pages/SalesPage';
 import Layout from './components/layout/Layout';
 import CashClosurePage from './pages/CashClosurePage';
 import UsersPage from './pages/UsersPage';
 import SettingsPage from './pages/SettingsPage';
-import DiagnosticPage from './pages/DiagnosticPage';
 import CashFlowPage from './pages/CashFlowPage';
 
 function App() {
@@ -42,6 +42,7 @@ function App() {
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/products" element={<ProductsPage />} />
+        <Route path="/drops" element={<DropsPage />} />
         <Route path="/sales" element={<SalesPage />} />
         {/* <Route path="/reports" element={<DashboardPage />} /> */}
         <Route path="/cash-closure" element={<CashClosurePage />} />

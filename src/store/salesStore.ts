@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Sale, DashboardStats, MixedPaymentBreakdown, SalesWithDiscounts } from '../lib/types';
+import type { Sale, DashboardStats, MixedPaymentBreakdown, SalesWithDiscounts, MonthlyRevenueReport, MonthlyRevenueComparison } from '../lib/types';
 import { salesService } from '../services/salesService';
 
 interface SalesState {
@@ -23,9 +23,13 @@ interface SalesState {
   ) => Promise<Sale>;
   getSalesWithDiscounts: (branchId: string, date: string) => Promise<SalesWithDiscounts>;
   getMixedPaymentBreakdown: (branchId: string, date: string) => Promise<MixedPaymentBreakdown[]>;
+  getPreviousMonthRevenueReport: (branchId: string) => Promise<MonthlyRevenueReport>;
+  getMonthlyRevenueReport: (branchId: string, year: number, month: number) => Promise<MonthlyRevenueReport>;
+  getMonthlyRevenueComparison: (branchId: string) => Promise<MonthlyRevenueComparison>;
+  getDateRangeRevenueReport: (branchId: string, startDate: string, endDate: string) => Promise<MonthlyRevenueReport>;
 }
 
-export const useSalesStore = create<SalesState>((set, get) => ({
+export const useSalesStore = create<SalesState>((set) => ({
   sales: [],
   dashboardStats: null,
   isLoading: false,
@@ -66,5 +70,21 @@ export const useSalesStore = create<SalesState>((set, get) => ({
 
   getMixedPaymentBreakdown: async (branchId: string, date: string) => {
     return await salesService.getMixedPaymentBreakdown(branchId, date);
+  },
+
+  getPreviousMonthRevenueReport: async (branchId: string) => {
+    return await salesService.getPreviousMonthRevenueReport(branchId);
+  },
+
+  getMonthlyRevenueReport: async (branchId: string, year: number, month: number) => {
+    return await salesService.getMonthlyRevenueReport(branchId, year, month);
+  },
+
+  getMonthlyRevenueComparison: async (branchId: string) => {
+    return await salesService.getMonthlyRevenueComparison(branchId);
+  },
+
+  getDateRangeRevenueReport: async (branchId: string, startDate: string, endDate: string) => {
+    return await salesService.getDateRangeRevenueReport(branchId, startDate, endDate);
   }
 }));

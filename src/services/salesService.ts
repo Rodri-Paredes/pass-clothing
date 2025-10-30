@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import type { Sale, SaleItem, DashboardStats, MixedPaymentBreakdown, SalesWithDiscounts } from '../lib/types';
+import type { Sale, DashboardStats, MixedPaymentBreakdown, SalesWithDiscounts, MonthlyRevenueReport, MonthlyRevenueComparison } from '../lib/types';
 
 export class SalesService {
   async createSale(
@@ -274,6 +274,113 @@ export class SalesService {
           })
         : [],
       dailySales
+    };
+  }
+
+  async getPreviousMonthRevenueReport(branchId: string): Promise<MonthlyRevenueReport> {
+    const { data, error } = await supabase.rpc('get_previous_month_revenue_report', {
+      branch_id_param: branchId
+    });
+
+    if (error) throw error;
+    
+    // La función devuelve un array, tomamos el primer elemento
+    const result = Array.isArray(data) ? data[0] : data;
+    
+    return {
+      start_date: result.start_date,
+      end_date: result.end_date,
+      total_revenue: parseFloat(result.total_revenue) || 0,
+      total_sales_count: parseInt(result.total_sales_count) || 0,
+      average_sale_amount: parseFloat(result.average_sale_amount) || 0,
+      revenue_by_payment_type: result.revenue_by_payment_type || {
+        efectivo: 0,
+        qr: 0,
+        tarjeta: 0,
+        mixto: 0
+      }
+    };
+  }
+
+  async getMonthlyRevenueReport(branchId: string, year: number, month: number): Promise<MonthlyRevenueReport> {
+    const { data, error } = await supabase.rpc('get_monthly_revenue_report', {
+      branch_id_param: branchId,
+      year_param: year,
+      month_param: month
+    });
+
+    if (error) throw error;
+    
+    // La función devuelve un array, tomamos el primer elemento
+    const result = Array.isArray(data) ? data[0] : data;
+    
+    return {
+      start_date: result.start_date,
+      end_date: result.end_date,
+      total_revenue: parseFloat(result.total_revenue) || 0,
+      total_sales_count: parseInt(result.total_sales_count) || 0,
+      average_sale_amount: parseFloat(result.average_sale_amount) || 0,
+      revenue_by_payment_type: result.revenue_by_payment_type || {
+        efectivo: 0,
+        qr: 0,
+        tarjeta: 0,
+        mixto: 0
+      },
+      daily_revenue: result.daily_revenue || []
+    };
+  }
+
+  async getMonthlyRevenueComparison(branchId: string): Promise<MonthlyRevenueComparison> {
+    const { data, error } = await supabase.rpc('get_monthly_revenue_comparison', {
+      branch_id_param: branchId
+    });
+
+    if (error) throw error;
+    
+    // La función devuelve un array, tomamos el primer elemento
+    const result = Array.isArray(data) ? data[0] : data;
+    
+    return {
+      current_month_start: result.current_month_start,
+      current_month_end: result.current_month_end,
+      current_month_revenue: parseFloat(result.current_month_revenue) || 0,
+      current_month_sales_count: parseInt(result.current_month_sales_count) || 0,
+      previous_month_start: result.previous_month_start,
+      previous_month_end: result.previous_month_end,
+      previous_month_revenue: parseFloat(result.previous_month_revenue) || 0,
+      previous_month_sales_count: parseInt(result.previous_month_sales_count) || 0,
+      revenue_change: parseFloat(result.revenue_change) || 0,
+      revenue_change_percentage: parseFloat(result.revenue_change_percentage) || 0,
+      sales_count_change: parseInt(result.sales_count_change) || 0,
+      sales_count_change_percentage: parseFloat(result.sales_count_change_percentage) || 0
+    };
+  }
+
+  async getDateRangeRevenueReport(branchId: string, startDate: string, endDate: string): Promise<MonthlyRevenueReport> {
+    const { data, error } = await supabase.rpc('get_date_range_revenue_report', {
+      branch_id_param: branchId,
+      start_date_param: startDate,
+      end_date_param: endDate
+    });
+
+    if (error) throw error;
+    
+    // La función devuelve un array, tomamos el primer elemento
+    const result = Array.isArray(data) ? data[0] : data;
+    
+    return {
+      start_date: result.start_date,
+      end_date: result.end_date,
+      total_revenue: parseFloat(result.total_revenue) || 0,
+      total_sales_count: parseInt(result.total_sales_count) || 0,
+      average_sale_amount: parseFloat(result.average_sale_amount) || 0,
+      revenue_by_payment_type: result.revenue_by_payment_type || {
+        efectivo: 0,
+        qr: 0,
+        tarjeta: 0,
+        mixto: 0
+      },
+      daily_revenue: result.daily_revenue || []
     };
   }
 }

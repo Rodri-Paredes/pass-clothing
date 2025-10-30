@@ -5,6 +5,8 @@ import { X, Upload } from 'lucide-react';
 import Button from '../ui/Button';
 import { useProductStore } from '../../store/productStore';
 import { useAuthStore } from '../../store/authStore';
+import { dropsService } from '../../services/dropsService';
+import type { Drop } from '../../lib/types';
 
 interface ProductFormData {
   name: string;
@@ -12,6 +14,7 @@ interface ProductFormData {
   category: string;
   price: number;
   is_visible: boolean;
+  drop_id?: string;
   variants: Array<{
     id?: string; // ID opcional para variantes existentes
     size: string;
@@ -30,17 +33,20 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>('');
+  const [drops, setDrops] = useState<Drop[]>([]);
+  const [selectedDropId, setSelectedDropId] = useState<string>(product?.drop_id || '');
   const [variants, setVariants] = useState<Array<{ id?: string; size: string; stock: { [branchId: string]: number } }>>([
     { size: '', stock: branches.reduce((acc, branch) => { acc[branch.id] = 0; return acc; }, {} as { [branchId: string]: number }) }
   ]);
 
-  const { register, handleSubmit, formState: { errors } } = useForm<ProductFormData>({
+  const { register, handleSubmit, formState: { errors }, setValue } = useForm<ProductFormData>({
     defaultValues: product ? {
       name: product.name,
       description: product.description,
       category: product.category,
       price: product.price ?? 0,
       is_visible: product.is_visible ?? true,
+      drop_id: product.drop_id || '',
       variants: product.variants?.map((variant: any) => ({
         size: variant.size,
         stock: branches.reduce((acc: any, branch: any) => {
@@ -51,9 +57,23 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
     } : { 
       price: 0,
       is_visible: true,
+      drop_id: '',
       variants: [{ size: '', stock: branches.reduce((acc, branch) => { acc[branch.id] = 0; return acc; }, {} as { [branchId: string]: number }) }] 
     }
   });
+
+  useEffect(() => {
+    const loadDrops = async () => {
+      try {
+        const activeDrops = await dropsService.getActiveDrops();
+        setDrops(activeDrops);
+      } catch (error) {
+        console.error('Error loading drops:', error);
+      }
+    };
+    
+    loadDrops();
+  }, []);
 
   useEffect(() => {
     if (product) {
@@ -160,7 +180,8 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
         category: data.category,
         image_url: imageUrl,
         price: data.price,
-        is_visible: data.is_visible
+        is_visible: data.is_visible,
+        drop_id: data.drop_id || undefined
       };
       
       let savedProduct;
@@ -326,6 +347,31 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
               <p className="text-sm text-red-600 mt-1">{errors.category.message}</p>
             )}
           </div>
+        </div>
+
+        {/* Drop Selection */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Drop/Colección
+          </label>
+          <select
+            value={selectedDropId}
+            onChange={(e) => {
+              setSelectedDropId(e.target.value);
+              setValue('drop_id', e.target.value);
+            }}
+            className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="">Sin drop asignado</option>
+            {drops.map((drop) => (
+              <option key={drop.id} value={drop.id}>
+                {drop.name} {drop.is_featured && '⭐'}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-gray-500 mt-1">
+            Selecciona el drop o colección al que pertenece este producto
+          </p>
         </div>
 
         {/* Price */}

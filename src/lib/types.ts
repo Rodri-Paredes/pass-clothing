@@ -23,8 +23,10 @@ export interface Product {
   price: number;
   image_url?: string;
   is_visible: boolean;
+  drop_id?: string;
   created_at: string;
   variants?: ProductVariant[];
+  drop?: Drop;
 }
 
 export interface ProductVariant {
@@ -207,4 +209,80 @@ export interface CashRegisterHistory {
   opening_user_name: string;
   closing_user_name?: string;
   status: 'ABIERTA' | 'CERRADA';
+}
+
+// Tipos para reportes de ingresos mensuales
+export interface MonthlyRevenueReport {
+  start_date: string;
+  end_date: string;
+  total_revenue: number;
+  total_sales_count: number;
+  average_sale_amount: number;
+  revenue_by_payment_type: {
+    efectivo: number;
+    qr: number;
+    tarjeta: number;
+    mixto: number;
+  };
+  daily_revenue?: Array<{
+    date: string;
+    total: number;
+    count: number;
+  }>;
+}
+
+export interface MonthlyRevenueComparison {
+  current_month_start: string;
+  current_month_end: string;
+  current_month_revenue: number;
+  current_month_sales_count: number;
+  previous_month_start: string;
+  previous_month_end: string;
+  previous_month_revenue: number;
+  previous_month_sales_count: number;
+  revenue_change: number;
+  revenue_change_percentage: number;
+  sales_count_change: number;
+  sales_count_change_percentage: number;
+}
+
+// Tipos para el sistema de drops
+export interface Drop {
+  id: string;
+  name: string;
+  description: string;
+  launch_date: string;
+  end_date?: string;
+  status: 'ACTIVO' | 'INACTIVO' | 'FINALIZADO';
+  is_featured: boolean;
+  image_url?: string;
+  banner_url?: string;
+  created_at: string;
+  updated_at: string;
+  products?: Product[];
+  product_count?: number;
+}
+
+export interface DropProduct {
+  id: string;
+  drop_id: string;
+  product_id: string;
+  is_featured: boolean;
+  sort_order: number;
+  created_at: string;
+  product?: Product;
+  drop?: Drop;
+}
+
+export interface DropWithProducts extends Drop {
+  products: Product[];
+  product_count: number;
+}
+
+export interface DropStats {
+  total_drops: number;
+  active_drops: number;
+  featured_drops: number;
+  total_products_in_drops: number;
+  upcoming_drops: number;
 }

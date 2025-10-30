@@ -5,10 +5,13 @@ import Input from '../components/ui/Input';
 import Card from '../components/ui/Card';
 import Modal from '../components/ui/Modal';
 import ProductForm from '../components/products/ProductForm';
+import { DropBadge } from '../components/drops/DropFilter';
 import { useProductStore } from '../store/productStore';
 import { useAuthStore } from '../store/authStore';
 import { CATEGORIES } from '../lib/constants';
 import { usePaginatedProducts } from '../hooks/usePaginatedProducts';
+import { dropsService } from '../services/dropsService';
+import type { Drop } from '../lib/types';
 
 const ProductsPage: React.FC = () => {
   const { deleteProduct, toggleProductVisibility } = useProductStore();
@@ -20,6 +23,7 @@ const ProductsPage: React.FC = () => {
   const [showHiddenProducts, setShowHiddenProducts] = useState(false);
   const [showVisibilityModal, setShowVisibilityModal] = useState(false);
   const [productToToggle, setProductToToggle] = useState<any>(null);
+  const [drops, setDrops] = useState<Drop[]>([]);
 
   const {
     items,
@@ -38,6 +42,20 @@ const ProductsPage: React.FC = () => {
   });
 
   const filteredProducts = useMemo(() => items, [items]);
+
+  // Cargar drops para mostrar información
+  React.useEffect(() => {
+    const loadDrops = async () => {
+      try {
+        const activeDrops = await dropsService.getActiveDrops();
+        setDrops(activeDrops);
+      } catch (error) {
+        console.error('Error loading drops:', error);
+      }
+    };
+    
+    loadDrops();
+  }, []);
 
   const handleDelete = async (id: string) => {
     if (window.confirm('¿Estás seguro de que quieres eliminar este producto? Esta acción no se puede deshacer y eliminará todas las variantes y stock asociados.')) {
@@ -62,6 +80,11 @@ const ProductsPage: React.FC = () => {
     }
   };
 
+  const getProductDrop = (product: any): Drop | null => {
+    if (!product.drop_id) return null;
+    return drops.find(drop => drop.id === product.drop_id) || null;
+  };
+
   const handleEdit = (product: any) => {
     setEditingProduct(product);
     setShowProductForm(true);
@@ -70,6 +93,8 @@ const ProductsPage: React.FC = () => {
   const handleCloseForm = () => {
     setShowProductForm(false);
     setEditingProduct(null);
+    // Recargar inmediatamente para reflejar los cambios
+    reload();
   };
 
   const handleToggleVisibilityClick = (product: any) => {
@@ -192,18 +217,19 @@ const ProductsPage: React.FC = () => {
                 <p className="text-sm text-gray-600 line-clamp-2">{product.description}</p>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-500">{product.category}</span>
-                  {product.variants && product.variants.length > 0 ? (
-                    <div className="flex flex-col">
-                      {product.variants.map(variant => (
-                        <span key={variant.id} className="text-xs font-medium text-gray-900">
-                          Talla {variant.size}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className="text-xs text-gray-400">Sin tallas</span>
-                  )}
+                  <DropBadge drop={getProductDrop(product)} />
                 </div>
+                {product.variants && product.variants.length > 0 ? (
+                  <div className="flex flex-col">
+                    {product.variants.map(variant => (
+                      <span key={variant.id} className="text-xs font-medium text-gray-900">
+                        Talla {variant.size}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-xs text-gray-400">Sin tallas</span>
+                )}
                 <div className="flex justify-between items-center pt-2">
                   <span className="text-lg font-bold text-blue-600">
                     ${product.price.toFixed(2)}
