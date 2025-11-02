@@ -1,104 +1,136 @@
 import { supabase } from '../lib/supabase';
 import type { Drop, DropProduct, DropWithProducts, DropStats } from '../lib/types';
+import { queryCache, cacheKeys, CACHE_TTL } from '../lib/queryCache';
 
 export const dropsService = {
-  // Obtener todos los drops
+  // Obtener todos los drops con product_count optimizado
   async getAllDrops(): Promise<Drop[]> {
-    // Primero obtenemos todos los drops
-    const { data: drops, error } = await supabase
-      .from('drops')
-      .select('*')
-      .order('launch_date', { ascending: false });
+    return queryCache.withCache(
+      cacheKeys.drops(),
+      async () => {
+        // Primero obtenemos todos los drops
+        const { data: drops, error } = await supabase
+          .from('drops')
+          .select('*')
+          .order('launch_date', { ascending: false });
 
-    if (error) throw error;
-    if (!drops) return [];
+        if (error) throw error;
+        if (!drops) return [];
 
-    // Para cada drop, contamos sus productos
-    const dropsWithCount = await Promise.all(
-      drops.map(async (drop) => {
-        const { count } = await supabase
+        // Obtener todos los counts en una sola query usando group by
+        const { data: counts, error: countsError } = await supabase
           .from('drop_products')
-          .select('*', { count: 'exact', head: true })
-          .eq('drop_id', drop.id);
-        
-        return {
+          .select('drop_id')
+          .in('drop_id', drops.map(d => d.id));
+
+        if (countsError) throw countsError;
+
+        // Crear un mapa de counts
+        const countMap = new Map<string, number>();
+        counts?.forEach(item => {
+          countMap.set(item.drop_id, (countMap.get(item.drop_id) || 0) + 1);
+        });
+
+        // Asignar los counts a los drops
+        return drops.map(drop => ({
           ...drop,
-          product_count: count || 0
-        };
-      })
+          product_count: countMap.get(drop.id) || 0
+        }));
+      },
+      CACHE_TTL.MEDIUM
     );
-    
-    return dropsWithCount;
   },
 
-  // Obtener drops activos
+  // Obtener drops activos con caché
   async getActiveDrops(): Promise<Drop[]> {
-    const { data: drops, error } = await supabase
-      .from('drops')
-      .select('*')
-      .eq('status', 'ACTIVO')
-      .order('is_featured', { ascending: false })
-      .order('launch_date', { ascending: false });
+    return queryCache.withCache(
+      cacheKeys.dropsActive(),
+      async () => {
+        const { data: drops, error } = await supabase
+          .from('drops')
+          .select('*')
+          .eq('status', 'ACTIVO')
+          .order('is_featured', { ascending: false })
+          .order('launch_date', { ascending: false });
 
-    if (error) throw error;
-    if (!drops) return [];
-    
-    const dropsWithCount = await Promise.all(
-      drops.map(async (drop) => {
-        const { count } = await supabase
-          .from('drop_products')
-          .select('*', { count: 'exact', head: true })
-          .eq('drop_id', drop.id);
+        if (error) throw error;
+        if (!drops) return [];
         
-        return {
+        // Optimización: obtener todos los counts en batch
+        const { data: counts, error: countsError } = await supabase
+          .from('drop_products')
+          .select('drop_id')
+          .in('drop_id', drops.map(d => d.id));
+
+        if (countsError) throw countsError;
+
+        const countMap = new Map<string, number>();
+        counts?.forEach(item => {
+          countMap.set(item.drop_id, (countMap.get(item.drop_id) || 0) + 1);
+        });
+
+        return drops.map(drop => ({
           ...drop,
-          product_count: count || 0
-        };
-      })
+          product_count: countMap.get(drop.id) || 0
+        }));
+      },
+      CACHE_TTL.SHORT // 1 minuto, ya que los drops activos pueden cambiar
     );
-    
-    return dropsWithCount;
   },
 
-  // Obtener drops destacados
+  // Obtener drops destacados con caché
   async getFeaturedDrops(): Promise<Drop[]> {
-    const { data: drops, error } = await supabase
-      .from('drops')
-      .select('*')
-      .eq('status', 'ACTIVO')
-      .eq('is_featured', true)
-      .order('launch_date', { ascending: false });
+    return queryCache.withCache(
+      cacheKeys.dropsFeatured(),
+      async () => {
+        const { data: drops, error } = await supabase
+          .from('drops')
+          .select('*')
+          .eq('status', 'ACTIVO')
+          .eq('is_featured', true)
+          .order('launch_date', { ascending: false });
 
-    if (error) throw error;
-    if (!drops) return [];
-    
-    const dropsWithCount = await Promise.all(
-      drops.map(async (drop) => {
-        const { count } = await supabase
-          .from('drop_products')
-          .select('*', { count: 'exact', head: true })
-          .eq('drop_id', drop.id);
+        if (error) throw error;
+        if (!drops) return [];
         
-        return {
+        // Optimización: obtener todos los counts en batch
+        const { data: counts, error: countsError } = await supabase
+          .from('drop_products')
+          .select('drop_id')
+          .in('drop_id', drops.map(d => d.id));
+
+        if (countsError) throw countsError;
+
+        const countMap = new Map<string, number>();
+        counts?.forEach(item => {
+          countMap.set(item.drop_id, (countMap.get(item.drop_id) || 0) + 1);
+        });
+
+        return drops.map(drop => ({
           ...drop,
-          product_count: count || 0
-        };
-      })
+          product_count: countMap.get(drop.id) || 0
+        }));
+      },
+      CACHE_TTL.SHORT
     );
-    
-    return dropsWithCount;
   },
 
-  // Obtener un drop por ID
+  // Obtener un drop por ID con caché
   async getDropById(id: string): Promise<Drop | null> {
-    const { data, error } = await supabase
-      .from('drops')
-      .select('*')
-      .eq('id', id)
-      .single();
+    return queryCache.withCache(
+      cacheKeys.drop(id),
+      async () => {
+        const { data, error } = await supabase
+          .from('drops')
+          .select('*')
+          .eq('id', id)
+          .single();
 
-    if (error) throw error;
-    return data;
+        if (error) throw error;
+        return data;
+      },
+      CACHE_TTL.MEDIUM
+    );
   },
 
   // Obtener productos de un drop específico
@@ -116,36 +148,42 @@ export const dropsService = {
     return data || [];
   },
 
-  // Obtener drop con sus productos
+  // Obtener drop con sus productos con caché
   async getDropWithProducts(dropId: string): Promise<DropWithProducts | null> {
-    const { data: drop, error: dropError } = await supabase
-      .from('drops')
-      .select('*')
-      .eq('id', dropId)
-      .single();
+    return queryCache.withCache(
+      cacheKeys.dropWithProducts(dropId),
+      async () => {
+        const { data: drop, error: dropError } = await supabase
+          .from('drops')
+          .select('*')
+          .eq('id', dropId)
+          .single();
 
-    if (dropError) throw dropError;
-    if (!drop) return null;
+        if (dropError) throw dropError;
+        if (!drop) return null;
 
-    const { data: products, error: productsError } = await supabase
-      .from('drop_products')
-      .select(`
-        *,
-        product:products(
-          *,
-          variants:product_variants(*)
-        )
-      `)
-      .eq('drop_id', dropId)
-      .order('sort_order', { ascending: true });
+        const { data: products, error: productsError } = await supabase
+          .from('drop_products')
+          .select(`
+            *,
+            product:products(
+              *,
+              variants:product_variants(*)
+            )
+          `)
+          .eq('drop_id', dropId)
+          .order('sort_order', { ascending: true });
 
-    if (productsError) throw productsError;
+        if (productsError) throw productsError;
 
-    return {
-      ...drop,
-      products: products?.map(dp => dp.product).filter(Boolean) || [],
-      product_count: products?.length || 0
-    };
+        return {
+          ...drop,
+          products: products?.map(dp => dp.product).filter(Boolean) || [],
+          product_count: products?.length || 0
+        };
+      },
+      CACHE_TTL.MEDIUM
+    );
   },
 
   // Crear un nuevo drop
@@ -157,6 +195,10 @@ export const dropsService = {
       .single();
 
     if (error) throw error;
+    
+    // Invalidar cachés relacionados
+    queryCache.invalidatePattern('drops:');
+    
     return data;
   },
 
@@ -170,6 +212,12 @@ export const dropsService = {
       .single();
 
     if (error) throw error;
+    
+    // Invalidar cachés relacionados
+    queryCache.invalidate(cacheKeys.drop(id));
+    queryCache.invalidate(cacheKeys.dropWithProducts(id));
+    queryCache.invalidatePattern('drops:');
+    
     return data;
   },
 
@@ -181,6 +229,11 @@ export const dropsService = {
       .eq('id', id);
 
     if (error) throw error;
+    
+    // Invalidar cachés relacionados
+    queryCache.invalidate(cacheKeys.drop(id));
+    queryCache.invalidate(cacheKeys.dropWithProducts(id));
+    queryCache.invalidatePattern('drops:');
   },
 
   // Agregar producto a un drop
@@ -200,6 +253,11 @@ export const dropsService = {
       .single();
 
     if (error) throw error;
+    
+    // Invalidar cachés relacionados
+    queryCache.invalidate(cacheKeys.dropWithProducts(dropId));
+    queryCache.invalidatePattern('drops:');
+    
     return data;
   },
 
@@ -212,6 +270,10 @@ export const dropsService = {
       .eq('product_id', productId);
 
     if (error) throw error;
+    
+    // Invalidar cachés relacionados
+    queryCache.invalidate(cacheKeys.dropWithProducts(dropId));
+    queryCache.invalidatePattern('drops:');
   },
 
   // Actualizar producto en drop

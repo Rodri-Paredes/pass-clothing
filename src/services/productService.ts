@@ -1,6 +1,7 @@
 // Removed duplicate top-level createProductVariant function
 import { supabase } from '../lib/supabase';
 import type { Product, Stock } from '../lib/types';
+import { queryCache, cacheKeys, CACHE_TTL } from '../lib/queryCache';
 
 export class ProductService {
   async createProductVariant(variant: { product_id: string; size: string }): Promise<any> {
@@ -13,6 +14,7 @@ export class ProductService {
     return data;
   }
 
+  // Versión con objeto para compatibilidad con hooks
   async getProductsPaginated(params: {
     page: number;
     limit: number;
@@ -21,78 +23,111 @@ export class ProductService {
     includeHidden?: boolean;
   }): Promise<{ items: Product[]; hasMore: boolean }> {
     const { page, limit, search, category, includeHidden = false } = params;
-    console.log('🔍 [ProductService] Búsqueda de productos:', { page, limit, search, category, includeHidden });
     
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
-
-    let query = supabase
-      .from('products')
-      .select(`
-        *,
-        variants:product_variants(*)
-      `)
-      .order('created_at', { ascending: false })
-      .range(from, to);
-
-    // Filtrar por visibilidad si no se incluyen productos ocultos
-    if (!includeHidden) {
-      query = query.eq('is_visible', true);
-    }
-
-    if (search && search.trim()) {
-      const term = `%${search.trim()}%`;
-      console.log('🔍 [ProductService] Aplicando filtro de búsqueda:', term);
-      query = query.or(`name.ilike.${term},description.ilike.${term}`);
-    }
-
-    if (category && category.trim()) {
-      console.log('🔍 [ProductService] Aplicando filtro de categoría:', category);
-      query = query.eq('category', category.trim());
-    }
-
-    const { data, error } = await query;
-    if (error) {
-      console.error('❌ [ProductService] Error en consulta:', error);
-      throw error;
-    }
+    const result = await this.getProductsPaginatedInternal(
+      page,
+      limit,
+      search,
+      category,
+      includeHidden
+    );
     
-    const items = (data as Product[]) || [];
-    console.log('📊 [ProductService] Productos encontrados:', items.length);
-    const hasMore = items.length === limit; // heurística sin count
-    return { items, hasMore };
+    return {
+      items: result.products,
+      hasMore: result.products.length === limit
+    };
+  }
+
+  private async getProductsPaginatedInternal(
+    page: number,
+    pageSize: number,
+    searchTerm?: string,
+    category?: string,
+    includeHidden = false
+  ): Promise<{ products: Product[]; total: number }> {
+    const cacheKey = cacheKeys.productsPaginated(page, pageSize, searchTerm, category, includeHidden);
+    
+    return queryCache.withCache(
+      cacheKey,
+      async () => {
+        let query = supabase
+          .from('products')
+          .select('*, variants:product_variants(*)', { count: 'exact' })
+          .order('created_at', { ascending: false });
+
+        if (!includeHidden) {
+          query = query.eq('is_visible', true);
+        }
+
+        if (searchTerm) {
+          query = query.or(`name.ilike.%${searchTerm}%,sku.ilike.%${searchTerm}%`);
+        }
+
+        if (category) {
+          query = query.eq('category', category);
+        }
+
+        const from = (page - 1) * pageSize;
+        const to = from + pageSize - 1;
+        query = query.range(from, to);
+
+        const { data, error, count } = await query;
+
+        if (error) throw error;
+
+        return {
+          products: data || [],
+          total: count || 0,
+        };
+      },
+      CACHE_TTL.SHORT // Shorter TTL for paginated data since it changes more frequently
+    );
   }
   async getProducts(includeHidden: boolean = false): Promise<Product[]> {
-    let query = supabase
-      .from('products')
-      .select(`
-        *,
-        variants:product_variants(*)
-      `)
-      .order('created_at', { ascending: false });
+    const cacheKey = cacheKeys.products(includeHidden);
+    
+    return queryCache.withCache(
+      cacheKey,
+      async () => {
+        let query = supabase
+          .from('products')
+          .select(`
+            *,
+            variants:product_variants(*)
+          `)
+          .order('created_at', { ascending: false });
 
-    // Filtrar por visibilidad si no se incluyen productos ocultos
-    if (!includeHidden) {
-      query = query.eq('is_visible', true);
-    }
+        // Filtrar por visibilidad si no se incluyen productos ocultos
+        if (!includeHidden) {
+          query = query.eq('is_visible', true);
+        }
 
-    const { data, error } = await query;
-    if (error) throw error;
-    return data || [];
+        const { data, error } = await query;
+        if (error) throw error;
+        return data || [];
+      },
+      CACHE_TTL.MEDIUM
+    );
   }
 
   async getProduct(id: string): Promise<Product | null> {
-    const { data, error } = await supabase
-      .from('products')
-      .select(`
-        *,
-        variants:product_variants(*)
-      `)
-      .eq('id', id)
-      .single();
+    return queryCache.withCache(
+      cacheKeys.product(id),
+      async () => {
+        const { data, error } = await supabase
+          .from('products')
+          .select(`
+            *,
+            variants:product_variants(*)
+          `)
+          .eq('id', id)
+          .single();
 
-    if (error) throw error;
-    return data;
+        if (error) throw error;
+        return data;
+      },
+      CACHE_TTL.MEDIUM
+    );
   }
 
   async createProduct(product: Omit<Product, 'id' | 'created_at'>): Promise<Product> {
@@ -103,6 +138,10 @@ export class ProductService {
       .single();
 
     if (error) throw error;
+    
+    // Invalidar cachés de productos
+    queryCache.invalidatePattern('products:');
+    
     return data;
   }
 
@@ -115,6 +154,11 @@ export class ProductService {
       .single();
 
     if (error) throw error;
+    
+    // Invalidar cachés específicos del producto y listados
+    queryCache.invalidate(cacheKeys.product(id));
+    queryCache.invalidatePattern('products:');
+    
     return data;
   }
 
@@ -177,6 +221,10 @@ export class ProductService {
       }
 
       console.log(`✅ [ProductService] Producto eliminado exitosamente: ${product.name}`);
+      
+      // Invalidar cachés del producto eliminado
+      queryCache.invalidate(cacheKeys.product(id));
+      queryCache.invalidatePattern('products:');
 
     } catch (error) {
       console.error('❌ [ProductService] Error en eliminación de producto:', error);
@@ -185,32 +233,44 @@ export class ProductService {
   }
 
   async getStockByBranch(branchId: string): Promise<Stock[]> {
-    const { data, error } = await supabase
-      .from('stock')
-      .select(`
-        *,
-        variant:product_variants(*),
-        branch:branches(*)
-      `)
-      .eq('branch_id', branchId)
-      .order('quantity', { ascending: true });
+    return queryCache.withCache(
+      cacheKeys.stockByBranch(branchId),
+      async () => {
+        const { data, error } = await supabase
+          .from('stock')
+          .select(`
+            *,
+            variant:product_variants(*),
+            branch:branches(*)
+          `)
+          .eq('branch_id', branchId)
+          .order('quantity', { ascending: true });
 
-    if (error) throw error;
-    return data || [];
+        if (error) throw error;
+        return data || [];
+      },
+      CACHE_TTL.SHORT // Stock cambia frecuentemente
+    );
   }
 
   async getStockByProduct(variantId: string): Promise<Stock[]> {
-    const { data, error } = await supabase
-      .from('stock')
-      .select(`
-        *,
-        variant:product_variants(*),
-        branch:branches(*)
-      `)
-      .eq('variant_id', variantId);
+    return queryCache.withCache(
+      cacheKeys.productStock(variantId),
+      async () => {
+        const { data, error } = await supabase
+          .from('stock')
+          .select(`
+            *,
+            variant:product_variants(*),
+            branch:branches(*)
+          `)
+          .eq('variant_id', variantId);
 
-    if (error) throw error;
-    return data || [];
+        if (error) throw error;
+        return data || [];
+      },
+      CACHE_TTL.SHORT
+    );
   }
 
   async updateStock(variantId: string, branchId: string, quantity: number): Promise<void> {
@@ -257,6 +317,12 @@ export class ProductService {
         
         if (actualQuantity === quantity) {
           console.log(`✅ [ProductService] Stock actualizado exitosamente - Variante: ${variantId}, Sucursal: ${branchId}, Cantidad: ${quantity}`);
+          
+          // Invalidar cachés de stock
+          queryCache.invalidate(cacheKeys.productStock(variantId));
+          queryCache.invalidate(cacheKeys.stockByBranch(branchId));
+          queryCache.invalidatePattern('stock:');
+          
           return; // Éxito, salir del bucle
         } else {
           console.warn(`⚠️ [ProductService] Discrepancia detectada - Esperado: ${quantity}, Actual: ${actualQuantity} (intento ${attempts})`);

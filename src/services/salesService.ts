@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { queryCache, cacheKeys, CACHE_TTL } from '../lib/queryCache';
 import type { Sale, DashboardStats, MixedPaymentBreakdown, SalesWithDiscounts, MonthlyRevenueReport, MonthlyRevenueComparison } from '../lib/types';
 
 export class SalesService {
@@ -91,6 +92,11 @@ export class SalesService {
     for (const item of items) {
       await this.updateStockAfterSale(item.variantId, branchId, item.quantity);
     }
+    
+    // Invalidar cachés relacionados con ventas
+    queryCache.invalidatePattern('sales:');
+    queryCache.invalidatePattern('dashboard:');
+    queryCache.invalidatePattern('stock:');
 
     return sale;
   }
@@ -180,208 +186,238 @@ export class SalesService {
   }
 
   async getDashboardStats(branchId: string): Promise<DashboardStats> {
-    const startOfMonth = new Date();
-    startOfMonth.setDate(1);
-    startOfMonth.setHours(0, 0, 0, 0);
+    return queryCache.withCache(
+      cacheKeys.dashboardStats(branchId),
+      async () => {
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0, 0, 0, 0);
 
-    // Monthly total
-    const { data: monthlyData, error: monthlyError } = await supabase
-      .from('sales')
-      .select('total')
-      .eq('branch_id', branchId)
-      .gte('sale_date', startOfMonth.toISOString());
+        // Monthly total
+        const { data: monthlyData, error: monthlyError } = await supabase
+          .from('sales')
+          .select('total')
+          .eq('branch_id', branchId)
+          .gte('sale_date', startOfMonth.toISOString());
 
-    if (monthlyError) throw monthlyError;
+        if (monthlyError) throw monthlyError;
 
-    const monthlyTotal = monthlyData?.reduce((sum, sale) => sum + sale.total, 0) || 0;
+        const monthlyTotal = monthlyData?.reduce((sum, sale) => sum + sale.total, 0) || 0;
 
-    // Total sales count
-    const { count: totalSales, error: countError } = await supabase
-      .from('sales')
-      .select('*', { count: 'exact', head: true })
-      .eq('branch_id', branchId);
+        // Total sales count
+        const { count: totalSales, error: countError } = await supabase
+          .from('sales')
+          .select('*', { count: 'exact', head: true })
+          .eq('branch_id', branchId);
 
-    if (countError) throw countError;
+        if (countError) throw countError;
 
-    // Top product (simplified query)
-    const { data: topProductData, error: topProductError } = await supabase
-      .from('sale_items')
-      .select(`
-        variant_id,
-        quantity,
-        variant:product_variants(
-          *,
-          product:products(name)
-        )
-      `)
-      .limit(1);
+        // Top product (simplified query)
+        const { data: topProductData, error: topProductError } = await supabase
+          .from('sale_items')
+          .select(`
+            variant_id,
+            quantity,
+            variant:product_variants(
+              *,
+              product:products(name)
+            )
+          `)
+          .limit(1);
 
-    if (topProductError) throw topProductError;
+        if (topProductError) throw topProductError;
 
-    // Low stock products
-    const { data: lowStockData, error: lowStockError } = await supabase
-      .from('stock')
-      .select(`
-        quantity,
-        variant:product_variants(
-          *,
-          product:products(name)
-        )
-      `)
-      .eq('branch_id', branchId)
-      .lt('quantity', 5)
-      .order('quantity', { ascending: true });
+        // Low stock products
+        const { data: lowStockData, error: lowStockError } = await supabase
+          .from('stock')
+          .select(`
+            quantity,
+            variant:product_variants(
+              *,
+              product:products(name)
+            )
+          `)
+          .eq('branch_id', branchId)
+          .lt('quantity', 5)
+          .order('quantity', { ascending: true });
 
-    if (lowStockError) throw lowStockError;
+        if (lowStockError) throw lowStockError;
 
-    // Daily sales for last 7 days
-    const last7Days = new Date();
-    last7Days.setDate(last7Days.getDate() - 7);
+        // Daily sales for last 7 days
+        const last7Days = new Date();
+        last7Days.setDate(last7Days.getDate() - 7);
 
-    const { data: dailySalesData, error: dailySalesError } = await supabase
-      .from('sales')
-      .select('total, sale_date')
-      .eq('branch_id', branchId)
-      .gte('sale_date', last7Days.toISOString())
-      .order('sale_date', { ascending: true });
+        const { data: dailySalesData, error: dailySalesError } = await supabase
+          .from('sales')
+          .select('total, sale_date')
+          .eq('branch_id', branchId)
+          .gte('sale_date', last7Days.toISOString())
+          .order('sale_date', { ascending: true });
 
-    if (dailySalesError) throw dailySalesError;
+        if (dailySalesError) throw dailySalesError;
 
-    const dailySales = dailySalesData?.map(sale => ({
-      date: new Date(sale.sale_date).toLocaleDateString(),
-      total: sale.total
-    })) || [];
+        const dailySales = dailySalesData?.map(sale => ({
+          date: new Date(sale.sale_date).toLocaleDateString(),
+          total: sale.total
+        })) || [];
 
-    const getFirst = (value: any) => Array.isArray(value) ? (value[0] ?? undefined) : value;
+        const getFirst = (value: any) => Array.isArray(value) ? (value[0] ?? undefined) : value;
 
-    return {
-      monthlyTotal,
-      totalSales: totalSales || 0,
-      topProduct: (Array.isArray(topProductData) && topProductData.length > 0 && topProductData[0].variant?.[0]?.product?.[0]?.name)
-        ? {
-            name: topProductData[0].variant[0].product[0].name,
-            total_sold: topProductData[0].quantity
-          }
-        : undefined,
-      lowStockProducts: Array.isArray(lowStockData)
-        ? lowStockData.map(item => {
-            const variant = getFirst(item.variant);
-            const product = getFirst(variant?.product);
-            return {
-              name: (product?.name as string) || 'Producto',
-              quantity: item.quantity as number
-            };
-          })
-        : [],
-      dailySales
-    };
+        return {
+          monthlyTotal,
+          totalSales: totalSales || 0,
+          topProduct: (Array.isArray(topProductData) && topProductData.length > 0 && topProductData[0].variant?.[0]?.product?.[0]?.name)
+            ? {
+                name: topProductData[0].variant[0].product[0].name,
+                total_sold: topProductData[0].quantity
+              }
+            : undefined,
+          lowStockProducts: Array.isArray(lowStockData)
+            ? lowStockData.map(item => {
+                const variant = getFirst(item.variant);
+                const product = getFirst(variant?.product);
+                return {
+                  name: (product?.name as string) || 'Producto',
+                  quantity: item.quantity as number
+                };
+              })
+            : [],
+          dailySales
+        };
+      },
+      CACHE_TTL.SHORT // Dashboard stats cambian frecuentemente
+    );
   }
 
   async getPreviousMonthRevenueReport(branchId: string): Promise<MonthlyRevenueReport> {
-    const { data, error } = await supabase.rpc('get_previous_month_revenue_report', {
-      branch_id_param: branchId
-    });
+    return queryCache.withCache(
+      cacheKeys.previousMonthRevenue(branchId),
+      async () => {
+        const { data, error } = await supabase.rpc('get_previous_month_revenue_report', {
+          branch_id_param: branchId
+        });
 
-    if (error) throw error;
-    
-    // La función devuelve un array, tomamos el primer elemento
-    const result = Array.isArray(data) ? data[0] : data;
-    
-    return {
-      start_date: result.start_date,
-      end_date: result.end_date,
-      total_revenue: parseFloat(result.total_revenue) || 0,
-      total_sales_count: parseInt(result.total_sales_count) || 0,
-      average_sale_amount: parseFloat(result.average_sale_amount) || 0,
-      revenue_by_payment_type: result.revenue_by_payment_type || {
-        efectivo: 0,
-        qr: 0,
-        tarjeta: 0,
-        mixto: 0
-      }
-    };
+        if (error) throw error;
+        
+        // La función devuelve un array, tomamos el primer elemento
+        const result = Array.isArray(data) ? data[0] : data;
+        
+        return {
+          start_date: result.start_date,
+          end_date: result.end_date,
+          total_revenue: parseFloat(result.total_revenue) || 0,
+          total_sales_count: parseInt(result.total_sales_count) || 0,
+          average_sale_amount: parseFloat(result.average_sale_amount) || 0,
+          revenue_by_payment_type: result.revenue_by_payment_type || {
+            efectivo: 0,
+            qr: 0,
+            tarjeta: 0,
+            mixto: 0
+          }
+        };
+      },
+      CACHE_TTL.MEDIUM
+    );
   }
 
   async getMonthlyRevenueReport(branchId: string, year: number, month: number): Promise<MonthlyRevenueReport> {
-    const { data, error } = await supabase.rpc('get_monthly_revenue_report', {
-      branch_id_param: branchId,
-      year_param: year,
-      month_param: month
-    });
+    return queryCache.withCache(
+      cacheKeys.monthlyRevenue(branchId, year, month),
+      async () => {
+        const { data, error } = await supabase.rpc('get_monthly_revenue_report', {
+          branch_id_param: branchId,
+          year_param: year,
+          month_param: month
+        });
 
-    if (error) throw error;
-    
-    // La función devuelve un array, tomamos el primer elemento
-    const result = Array.isArray(data) ? data[0] : data;
-    
-    return {
-      start_date: result.start_date,
-      end_date: result.end_date,
-      total_revenue: parseFloat(result.total_revenue) || 0,
-      total_sales_count: parseInt(result.total_sales_count) || 0,
-      average_sale_amount: parseFloat(result.average_sale_amount) || 0,
-      revenue_by_payment_type: result.revenue_by_payment_type || {
-        efectivo: 0,
-        qr: 0,
-        tarjeta: 0,
-        mixto: 0
+        if (error) throw error;
+        
+        // La función devuelve un array, tomamos el primer elemento
+        const result = Array.isArray(data) ? data[0] : data;
+        
+        return {
+          start_date: result.start_date,
+          end_date: result.end_date,
+          total_revenue: parseFloat(result.total_revenue) || 0,
+          total_sales_count: parseInt(result.total_sales_count) || 0,
+          average_sale_amount: parseFloat(result.average_sale_amount) || 0,
+          revenue_by_payment_type: result.revenue_by_payment_type || {
+            efectivo: 0,
+            qr: 0,
+            tarjeta: 0,
+            mixto: 0
+          },
+          daily_revenue: result.daily_revenue || []
+        };
       },
-      daily_revenue: result.daily_revenue || []
-    };
+      CACHE_TTL.LONG // Reportes históricos pueden tener TTL más largo
+    );
   }
 
   async getMonthlyRevenueComparison(branchId: string): Promise<MonthlyRevenueComparison> {
-    const { data, error } = await supabase.rpc('get_monthly_revenue_comparison', {
-      branch_id_param: branchId
-    });
+    return queryCache.withCache(
+      cacheKeys.monthlyComparison(branchId),
+      async () => {
+        const { data, error } = await supabase.rpc('get_monthly_revenue_comparison', {
+          branch_id_param: branchId
+        });
 
-    if (error) throw error;
-    
-    // La función devuelve un array, tomamos el primer elemento
-    const result = Array.isArray(data) ? data[0] : data;
-    
-    return {
-      current_month_start: result.current_month_start,
-      current_month_end: result.current_month_end,
-      current_month_revenue: parseFloat(result.current_month_revenue) || 0,
-      current_month_sales_count: parseInt(result.current_month_sales_count) || 0,
-      previous_month_start: result.previous_month_start,
-      previous_month_end: result.previous_month_end,
-      previous_month_revenue: parseFloat(result.previous_month_revenue) || 0,
-      previous_month_sales_count: parseInt(result.previous_month_sales_count) || 0,
-      revenue_change: parseFloat(result.revenue_change) || 0,
-      revenue_change_percentage: parseFloat(result.revenue_change_percentage) || 0,
-      sales_count_change: parseInt(result.sales_count_change) || 0,
-      sales_count_change_percentage: parseFloat(result.sales_count_change_percentage) || 0
-    };
+        if (error) throw error;
+        
+        // La función devuelve un array, tomamos el primer elemento
+        const result = Array.isArray(data) ? data[0] : data;
+        
+        return {
+          current_month_start: result.current_month_start,
+          current_month_end: result.current_month_end,
+          current_month_revenue: parseFloat(result.current_month_revenue) || 0,
+          current_month_sales_count: parseInt(result.current_month_sales_count) || 0,
+          previous_month_start: result.previous_month_start,
+          previous_month_end: result.previous_month_end,
+          previous_month_revenue: parseFloat(result.previous_month_revenue) || 0,
+          previous_month_sales_count: parseInt(result.previous_month_sales_count) || 0,
+          revenue_change: parseFloat(result.revenue_change) || 0,
+          revenue_change_percentage: parseFloat(result.revenue_change_percentage) || 0,
+          sales_count_change: parseInt(result.sales_count_change) || 0,
+          sales_count_change_percentage: parseFloat(result.sales_count_change_percentage) || 0
+        };
+      },
+      CACHE_TTL.SHORT // Comparación cambia día a día
+    );
   }
 
   async getDateRangeRevenueReport(branchId: string, startDate: string, endDate: string): Promise<MonthlyRevenueReport> {
-    const { data, error } = await supabase.rpc('get_date_range_revenue_report', {
-      branch_id_param: branchId,
-      start_date_param: startDate,
-      end_date_param: endDate
-    });
+    return queryCache.withCache(
+      cacheKeys.dateRangeRevenue(branchId, startDate, endDate),
+      async () => {
+        const { data, error } = await supabase.rpc('get_date_range_revenue_report', {
+          branch_id_param: branchId,
+          start_date_param: startDate,
+          end_date_param: endDate
+        });
 
-    if (error) throw error;
-    
-    // La función devuelve un array, tomamos el primer elemento
-    const result = Array.isArray(data) ? data[0] : data;
-    
-    return {
-      start_date: result.start_date,
-      end_date: result.end_date,
-      total_revenue: parseFloat(result.total_revenue) || 0,
-      total_sales_count: parseInt(result.total_sales_count) || 0,
-      average_sale_amount: parseFloat(result.average_sale_amount) || 0,
-      revenue_by_payment_type: result.revenue_by_payment_type || {
-        efectivo: 0,
-        qr: 0,
-        tarjeta: 0,
-        mixto: 0
+        if (error) throw error;
+        
+        // La función devuelve un array, tomamos el primer elemento
+        const result = Array.isArray(data) ? data[0] : data;
+        
+        return {
+          start_date: result.start_date,
+          end_date: result.end_date,
+          total_revenue: parseFloat(result.total_revenue) || 0,
+          total_sales_count: parseInt(result.total_sales_count) || 0,
+          average_sale_amount: parseFloat(result.average_sale_amount) || 0,
+          revenue_by_payment_type: result.revenue_by_payment_type || {
+            efectivo: 0,
+            qr: 0,
+            tarjeta: 0,
+            mixto: 0
+          },
+          daily_revenue: result.daily_revenue || []
+        };
       },
-      daily_revenue: result.daily_revenue || []
-    };
+      CACHE_TTL.MEDIUM // Reportes de rango customizado
+    );
   }
 }
 
