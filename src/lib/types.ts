@@ -82,6 +82,8 @@ export interface SaleItem {
 
 export interface DashboardStats {
   monthlyTotal: number;
+  monthlySalesCount: number;
+  monthlyItemsSold: number;
   totalSales: number;
   topProduct?: {
     name: string;

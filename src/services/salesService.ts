@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import type { Sale, DashboardStats, MixedPaymentBreakdown, SalesWithDiscounts, MonthlyRevenueReport, MonthlyRevenueComparison } from '../lib/types';
+import { toBoliviaStartOfDay, toBoliviaEndOfDay } from '../lib/constants';
 
 export class SalesService {
   async createSale(
@@ -180,28 +181,64 @@ export class SalesService {
   }
 
   async getDashboardStats(branchId: string): Promise<DashboardStats> {
-    const startOfMonth = new Date();
-    startOfMonth.setDate(1);
-    startOfMonth.setHours(0, 0, 0, 0);
+    // Usar zona horaria de Bolivia para calcular inicio de mes
+    const laPazNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/La_Paz' }));
+    const year = laPazNow.getFullYear();
+    const month = laPazNow.getMonth(); // 0-indexed
+    
+    // Formato: YYYY-MM-01T00:00:00-04:00
+    const startOfMonthDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    const startOfMonthStr = toBoliviaStartOfDay(startOfMonthDate);
 
-    // Monthly total
+    // Monthly total revenue
     const { data: monthlyData, error: monthlyError } = await supabase
       .from('sales')
       .select('total')
       .eq('branch_id', branchId)
-      .gte('sale_date', startOfMonth.toISOString());
+      .gte('sale_date', startOfMonthStr);
 
     if (monthlyError) throw monthlyError;
 
     const monthlyTotal = monthlyData?.reduce((sum, sale) => sum + sale.total, 0) || 0;
 
-    // Total sales count
+    // Monthly sales count (del mes actual, no histórico)
+    const { count: monthlySalesCount, error: monthlyCountError } = await supabase
+      .from('sales')
+      .select('*', { count: 'exact', head: true })
+      .eq('branch_id', branchId)
+      .gte('sale_date', startOfMonthStr);
+
+    if (monthlyCountError) throw monthlyCountError;
+
+    // Total sales count (histórico - para referencia)
     const { count: totalSales, error: countError } = await supabase
       .from('sales')
       .select('*', { count: 'exact', head: true })
       .eq('branch_id', branchId);
 
     if (countError) throw countError;
+
+    // Monthly items sold (prendas vendidas del mes)
+    const { data: monthlySalesIds, error: monthlySalesIdsError } = await supabase
+      .from('sales')
+      .select('id')
+      .eq('branch_id', branchId)
+      .gte('sale_date', startOfMonthStr);
+
+    if (monthlySalesIdsError) throw monthlySalesIdsError;
+
+    let monthlyItemsSold = 0;
+    if (monthlySalesIds && monthlySalesIds.length > 0) {
+      const saleIds = monthlySalesIds.map(s => s.id);
+      const { data: itemsData, error: itemsError } = await supabase
+        .from('sale_items')
+        .select('quantity')
+        .in('sale_id', saleIds);
+
+      if (!itemsError && itemsData) {
+        monthlyItemsSold = itemsData.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+      }
+    }
 
     // Top product (simplified query)
     const { data: topProductData, error: topProductError } = await supabase
@@ -234,21 +271,26 @@ export class SalesService {
 
     if (lowStockError) throw lowStockError;
 
-    // Daily sales for last 7 days
-    const last7Days = new Date();
-    last7Days.setDate(last7Days.getDate() - 7);
+    // Daily sales for last 7 days (usando zona horaria de Bolivia)
+    const laPazNow7 = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/La_Paz' }));
+    laPazNow7.setDate(laPazNow7.getDate() - 7);
+    const year7 = laPazNow7.getFullYear();
+    const month7 = String(laPazNow7.getMonth() + 1).padStart(2, '0');
+    const day7 = String(laPazNow7.getDate()).padStart(2, '0');
+    const last7DaysDate = `${year7}-${month7}-${day7}`;
+    const last7DaysStr = toBoliviaStartOfDay(last7DaysDate);
 
     const { data: dailySalesData, error: dailySalesError } = await supabase
       .from('sales')
       .select('total, sale_date')
       .eq('branch_id', branchId)
-      .gte('sale_date', last7Days.toISOString())
+      .gte('sale_date', last7DaysStr)
       .order('sale_date', { ascending: true });
 
     if (dailySalesError) throw dailySalesError;
 
     const dailySales = dailySalesData?.map(sale => ({
-      date: new Date(sale.sale_date).toLocaleDateString(),
+      date: new Date(sale.sale_date).toLocaleDateString('es-ES', { timeZone: 'America/La_Paz' }),
       total: sale.total
     })) || [];
 
@@ -256,6 +298,8 @@ export class SalesService {
 
     return {
       monthlyTotal,
+      monthlySalesCount: monthlySalesCount || 0,
+      monthlyItemsSold,
       totalSales: totalSales || 0,
       topProduct: (Array.isArray(topProductData) && topProductData.length > 0 && topProductData[0].variant?.[0]?.product?.[0]?.name)
         ? {
@@ -382,6 +426,47 @@ export class SalesService {
       },
       daily_revenue: result.daily_revenue || []
     };
+  }
+
+  /**
+   * Devuelve la cantidad total de unidades vendidas (sumatoria de sale_items.quantity)
+   * para una sucursal en un rango de fechas (inclusive).
+   */
+  async getDateRangeItemsSold(branchId: string, startDate: string, endDate: string): Promise<number> {
+    // Agregar timezone de Bolivia si no lo tiene
+    const startWithTz = startDate.includes('T') ? startDate : toBoliviaStartOfDay(startDate);
+    const endWithTz = endDate.includes('T') ? endDate : toBoliviaEndOfDay(endDate);
+    
+    // Primero obtener todas las ventas del rango y sucursal
+    const { data: salesData, error: salesError } = await supabase
+      .from('sales')
+      .select('id')
+      .eq('branch_id', branchId)
+      .gte('sale_date', startWithTz)
+      .lte('sale_date', endWithTz);
+
+    if (salesError) throw salesError;
+    if (!salesData || salesData.length === 0) return 0;
+
+    // Extraer los IDs de las ventas
+    const saleIds = salesData.map(s => s.id);
+
+    // Ahora obtener los items de esas ventas
+    const { data: itemsData, error: itemsError } = await supabase
+      .from('sale_items')
+      .select('quantity')
+      .in('sale_id', saleIds);
+
+    if (itemsError) throw itemsError;
+    if (!itemsData || !Array.isArray(itemsData)) return 0;
+
+    // Sumar las cantidades
+    const totalItems = itemsData.reduce((sum: number, item: any) => {
+      const qty = Number(item.quantity) || 0;
+      return sum + qty;
+    }, 0);
+
+    return totalItems;
   }
 }
 

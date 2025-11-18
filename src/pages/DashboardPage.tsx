@@ -2,13 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { 
   TrendingUp, 
   Package, 
-  AlertTriangle, 
   ShoppingCart,
   CalendarRange
 } from 'lucide-react';
+import { toBoliviaStartOfDay, toBoliviaEndOfDay } from '../lib/constants';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
+import { salesService } from '../services/salesService';
 import { useAuthStore } from '../store/authStore';
 import { useSalesStore } from '../store/salesStore';
 import FeaturedDropsSection from '../components/drops/FeaturedDropsSection';
@@ -24,6 +25,8 @@ const DashboardPage: React.FC = () => {
   } = useSalesStore();
   const [showAllLowStock, setShowAllLowStock] = useState(false);
   const [customDateRangeReport, setCustomDateRangeReport] = useState<MonthlyRevenueReport | null>(null);
+  const [itemsSoldForRange, setItemsSoldForRange] = useState<number | null>(null);
+  const [preset, setPreset] = useState<string>('');
   const [showDateRangePicker, setShowDateRangePicker] = useState(false);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -36,12 +39,107 @@ const DashboardPage: React.FC = () => {
     try {
       const report = await getDateRangeRevenueReport(activeBranch.id, startDate, endDate);
       setCustomDateRangeReport(report);
+      // traer cantidad de prendas vendidas en el rango
+      try {
+        // Agregar timezone de Bolivia a las fechas
+        const startWithTz = toBoliviaStartOfDay(startDate);
+        const endWithTz = toBoliviaEndOfDay(endDate);
+        const itemsCount = await salesService.getDateRangeItemsSold(activeBranch.id, startWithTz, endWithTz);
+        setItemsSoldForRange(itemsCount);
+      } catch (err) {
+        console.error('Error fetching items sold for range:', err);
+        setItemsSoldForRange(null);
+      }
     } catch (error) {
       console.error('Error loading custom date range report:', error);
     } finally {
       setLoadingCustomReport(false);
     }
   };
+
+  // Helpers for common presets
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+
+  const getPresetRange = (key: string) => {
+    const now = new Date();
+    switch (key) {
+      case 'today': {
+        return { start: fmt(now), end: fmt(now) };
+      }
+      case 'month': {
+        const start = new Date(now.getFullYear(), now.getMonth(), 1);
+        const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        return { start: fmt(start), end: fmt(end) };
+      }
+      case 'year': {
+        const start = new Date(now.getFullYear(), 0, 1);
+        const end = new Date(now.getFullYear(), 11, 31);
+        return { start: fmt(start), end: fmt(end) };
+      }
+      case 'pay_current':
+        return getCurrentPayrollPeriod();
+      case 'pay_previous':
+        return getPreviousPayrollPeriod();
+      default:
+        return null;
+    }
+  };
+
+  const applyPreset = async (key: string) => {
+    if (!activeBranch) return;
+    const range = getPresetRange(key);
+    if (!range) return;
+    setStartDate(range.start);
+    setEndDate(range.end);
+    setPreset(key);
+    setLoadingCustomReport(true);
+    try {
+      // Agregar timezone de Bolivia a las fechas
+      const startWithTz = toBoliviaStartOfDay(range.start);
+      const endWithTz = toBoliviaEndOfDay(range.end);
+      const report = await getDateRangeRevenueReport(activeBranch.id, range.start, range.end);
+      setCustomDateRangeReport(report);
+      const itemsCount = await salesService.getDateRangeItemsSold(activeBranch.id, startWithTz, endWithTz);
+      setItemsSoldForRange(itemsCount);
+    } catch (err) {
+      console.error('Error applying preset:', err);
+    } finally {
+      setLoadingCustomReport(false);
+    }
+  };
+
+  // Calcula el período de pago: del 19 del mes anterior al 18 del mes actual
+  const getCurrentPayrollPeriod = (): { start: string; end: string } => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth(); // 0-index
+
+    // Si hoy es >= 18 consideramos periodo que va 19 del mes actual? Usamos convención: periodo vigente es 19 del mes previo -> 18 mes actual
+    const end = new Date(year, month, 18);
+    const start = new Date(year, month - 1, 19);
+
+    // Formato YYYY-MM-DD
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    return { start: fmt(start), end: fmt(end) };
+  };
+
+  const getPreviousPayrollPeriod = (): { start: string; end: string } => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+
+    // Periodo anterior: retroceder un mes completo
+    const end = new Date(year, month - 1, 18);
+    const start = new Date(year, month - 2, 19);
+
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    return { start: fmt(start), end: fmt(end) };
+  };
+
+  
 
   useEffect(() => {
     if (activeBranch) {
@@ -57,27 +155,47 @@ const DashboardPage: React.FC = () => {
     );
   }
 
+  // Determinar qué valores mostrar según si hay un rango seleccionado
+  const displayRevenue = customDateRangeReport 
+    ? customDateRangeReport.total_revenue 
+    : (dashboardStats?.monthlyTotal || 0);
+  
+  const displaySalesCount = customDateRangeReport 
+    ? customDateRangeReport.total_sales_count 
+    : (dashboardStats?.monthlySalesCount || 0);
+  
+  const displayItemsSold = customDateRangeReport
+    ? (itemsSoldForRange ?? 0)
+    : (dashboardStats?.monthlyItemsSold || 0);
+
+  const rangeLabel = customDateRangeReport 
+    ? `${new Date(customDateRangeReport.start_date).toLocaleDateString('es-ES')} - ${new Date(customDateRangeReport.end_date).toLocaleDateString('es-ES')}`
+    : 'Mes actual';
+
   const stats = [
     {
-      name: 'Ventas del Mes',
-      value: `$${dashboardStats?.monthlyTotal?.toFixed(2) || '0.00'}`,
+      name: 'Total Ingresos',
+      value: `$${displayRevenue.toFixed(2)}`,
       icon: TrendingUp,
       color: 'text-green-600',
-      bgColor: 'bg-green-100'
+      bgColor: 'bg-green-100',
+      subtitle: rangeLabel
     },
     {
-      name: 'Total Ventas',
-      value: dashboardStats?.totalSales || 0,
+      name: 'Número de Ventas',
+      value: displaySalesCount,
       icon: ShoppingCart,
       color: 'text-blue-600',
-      bgColor: 'bg-blue-100'
+      bgColor: 'bg-blue-100',
+      subtitle: rangeLabel
     },
     {
-      name: 'Stock Bajo',
-      value: dashboardStats?.lowStockProducts?.length || 0,
-      icon: AlertTriangle,
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-100'
+      name: 'Prendas Vendidas',
+      value: displayItemsSold,
+      icon: Package,
+      color: 'text-purple-600',
+      bgColor: 'bg-purple-100',
+      subtitle: rangeLabel
     }
   ];
 
@@ -90,39 +208,30 @@ const DashboardPage: React.FC = () => {
         </p>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {stats.map((stat) => (
-          <Card key={stat.name} className="flex items-center space-x-4">
-            <div className={`p-3 rounded-full ${stat.bgColor}`}>
-              <stat.icon className={`h-6 w-6 ${stat.color}`} />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-600">{stat.name}</p>
-              <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-            </div>
-          </Card>
-        ))}
-      </div>
-
-      {/* Selector de Rango de Fechas Personalizado */}
+      {/* Selector de Período */}
       <Card>
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-              <CalendarRange className="h-5 w-5 mr-2 text-blue-600" />
-              Reporte por Rango de Fechas
-            </h3>
-            <Button
-              variant="ghost"
-              onClick={() => setShowDateRangePicker(!showDateRangePicker)}
-            >
-              {showDateRangePicker ? 'Ocultar' : 'Seleccionar Fechas'}
+        <div className="p-4">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">Seleccionar Período</h3>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant={preset === 'month' ? 'primary' : 'ghost'} onClick={() => applyPreset('month')}>
+              Mes
+            </Button>
+            <Button size="sm" variant={preset === 'year' ? 'primary' : 'ghost'} onClick={() => applyPreset('year')}>
+              Año
+            </Button>
+            <Button size="sm" variant={preset === 'pay_current' ? 'primary' : 'ghost'} onClick={() => applyPreset('pay_current')}>
+              Período de pago actual
+            </Button>
+            <Button size="sm" variant={preset === 'pay_previous' ? 'primary' : 'ghost'} onClick={() => applyPreset('pay_previous')}>
+              Período de pago anterior
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => { setShowDateRangePicker(!showDateRangePicker); }}>
+              {showDateRangePicker ? 'Ocultar rango personalizado' : 'Rango personalizado'}
             </Button>
           </div>
-
+          
           {showDateRangePicker && (
-            <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+            <div className="mt-4 p-4 bg-gray-50 rounded-lg">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -152,14 +261,39 @@ const DashboardPage: React.FC = () => {
                     disabled={!startDate || !endDate || loadingCustomReport}
                     className="w-full"
                   >
-                    {loadingCustomReport ? 'Cargando...' : 'Generar Reporte'}
+                    {loadingCustomReport ? 'Cargando...' : 'Aplicar Rango'}
                   </Button>
                 </div>
               </div>
             </div>
           )}
+        </div>
+      </Card>
 
-          {customDateRangeReport && (
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {stats.map((stat) => (
+          <Card key={stat.name} className="flex items-center space-x-4">
+            <div className={`p-3 rounded-full ${stat.bgColor}`}>
+              <stat.icon className={`h-6 w-6 ${stat.color}`} />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-gray-600">{stat.name}</p>
+              <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+              <p className="text-xs text-gray-500 mt-1">{stat.subtitle}</p>
+            </div>
+          </Card>
+        ))}
+      </div>
+
+      {/* Desglose Detallado por Tipo de Pago */}
+      {customDateRangeReport && (
+        <Card>
+          <div className="p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <CalendarRange className="h-5 w-5 mr-2 text-blue-600" />
+              Desglose Detallado
+            </h3>
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
@@ -181,6 +315,12 @@ const DashboardPage: React.FC = () => {
                       <span className="text-gray-600">Número de ventas:</span>
                       <span className="font-medium">
                         {customDateRangeReport.total_sales_count}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Prendas vendidas (unidades):</span>
+                      <span className="font-medium">
+                        {itemsSoldForRange != null ? itemsSoldForRange : '—'}
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -251,16 +391,9 @@ const DashboardPage: React.FC = () => {
                 </div>
               )}
             </div>
-          )}
-
-          {!customDateRangeReport && !showDateRangePicker && (
-            <div className="text-center py-8 text-gray-500">
-              <CalendarRange className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>Selecciona un rango de fechas para ver el reporte</p>
-            </div>
-          )}
-        </div>
-      </Card>
+          </div>
+        </Card>
+      )}
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
