@@ -9,11 +9,6 @@ import {
   Settings,
   Store,
   X,
-  Database,
-  Home, 
-  LogOut,
-  Stethoscope,
-  DollarSign,
   Star
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';

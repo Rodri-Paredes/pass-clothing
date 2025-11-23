@@ -3,15 +3,12 @@ import {
   Calendar, 
   Star, 
   Package, 
-  Plus, 
   Edit, 
   Trash2, 
   Eye,
-  Filter,
   Search,
   Grid,
   List,
-  ArrowUpDown,
   Upload,
   X,
   Image as ImageIcon
@@ -19,9 +16,8 @@ import {
 import Button from '../ui/Button';
 import Card from '../ui/Card';
 import Input from '../ui/Input';
-import Modal from '../ui/Modal';
 import { supabase } from '../../lib/supabase';
-import type { Drop, DropWithProducts, DropStats } from '../../lib/types';
+import type { Drop, DropStats } from '../../lib/types';
 
 interface DropCardProps {
   drop: Drop;
