@@ -237,3 +237,4 @@ COMMENT ON COLUMN drops.is_featured IS 'Indica si el drop es destacado';
 COMMENT ON COLUMN drop_products.is_featured IS 'Indica si el producto es destacado dentro del drop';
 COMMENT ON COLUMN drop_products.sort_order IS 'Orden de visualización del producto en el drop';
 
+

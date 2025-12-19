@@ -30,6 +30,7 @@ const SalesPage: React.FC = () => {
   const [paymentType, setPaymentType] = useState<'QR' | 'EFECTIVO' | 'TARJETA' | 'MIXTO'>('EFECTIVO');
   const [selectedSale, setSelectedSale] = useState<any | null>(null);
   const [discountAmount, setDiscountAmount] = useState<number>(0);
+  const [saleNotes, setSaleNotes] = useState<string>('');
   /* removed unused state: showMixedPaymentModal */
   const [mixedPaymentDetails, setMixedPaymentDetails] = useState({
     efectivo: 0,
@@ -153,10 +154,11 @@ const SalesPage: React.FC = () => {
         paymentDetails = mixedPaymentDetails;
       }
 
-      // Pass paymentType, discountAmount, and paymentDetails to createSale
-      await createSale(items, activeBranch.id, user.id, paymentType, discountAmount, paymentDetails);
+      // Pass paymentType, discountAmount, paymentDetails, and notes to createSale
+      await createSale(items, activeBranch.id, user.id, paymentType, discountAmount, paymentDetails, saleNotes);
       setCart([]);
       setDiscountAmount(0);
+      setSaleNotes('');
       setMixedPaymentDetails({ efectivo: 0, qr: 0, tarjeta: 0 });
       // Recargar stock después de la venta
       if (activeBranch) {
@@ -411,6 +413,25 @@ const SalesPage: React.FC = () => {
                         >
                           Limpiar
                         </Button>
+                      </div>
+                    </div>
+
+                    {/* Sección de notas/descripción */}
+                    <div className="mb-6">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-base font-semibold text-gray-700">Descripción:</span>
+                        <span className="text-xs text-gray-400">(Opcional - ej: giftcard, venta especial)</span>
+                      </div>
+                      <textarea
+                        value={saleNotes}
+                        onChange={(e) => setSaleNotes(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Ej: Giftcard $100, Pedido especial Juan, etc."
+                        rows={2}
+                        maxLength={200}
+                      />
+                      <div className="text-xs text-gray-400 mt-1 text-right">
+                        {saleNotes.length}/200 caracteres
                       </div>
                     </div>
 

@@ -13,7 +13,8 @@ export class SalesService {
       efectivo?: number;
       qr?: number;
       tarjeta?: number;
-    }
+    },
+    notes?: string
   ): Promise<Sale> {
     const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
     const total = Math.max(0, subtotal - discountAmount);
@@ -59,6 +60,11 @@ export class SalesService {
       sale_date: saleDateISO,
       payment_type: paymentType
     };
+
+    // Agregar notas si existen
+    if (notes && notes.trim()) {
+      saleData.notes = notes.trim();
+    }
 
     // Agregar detalles de pago mixto si es necesario
     if (paymentType === 'MIXTO' && paymentDetails) {

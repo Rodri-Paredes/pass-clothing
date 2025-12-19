@@ -6,6 +6,7 @@ export class CashClosureService {
     branchId: string,
     userId: string,
     movementType: 'INGRESO' | 'EGRESO',
+    paymentType: 'EFECTIVO' | 'QR' | 'TARJETA',
     amount: number,
     description: string
   ): Promise<void> {
@@ -28,7 +29,7 @@ export class CashClosureService {
         cash_register_id: openRegister.id,
         user_id: userId,
         movement_type: movementType,
-        payment_type: 'EFECTIVO', // Los movimientos manuales son siempre en efectivo
+        payment_type: paymentType,
         amount,
         description
       });

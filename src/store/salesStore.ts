@@ -19,7 +19,8 @@ interface SalesState {
       efectivo?: number;
       qr?: number;
       tarjeta?: number;
-    }
+    },
+    notes?: string
   ) => Promise<Sale>;
   getSalesWithDiscounts: (branchId: string, date: string) => Promise<SalesWithDiscounts>;
   getMixedPaymentBreakdown: (branchId: string, date: string) => Promise<MixedPaymentBreakdown[]>;
@@ -56,8 +57,8 @@ export const useSalesStore = create<SalesState>((set) => ({
     }
   },
 
-  createSale: async (items, branchId, userId, paymentType, discountAmount = 0, paymentDetails) => {
-    const sale = await salesService.createSale(items, branchId, userId, paymentType, discountAmount, paymentDetails);
+  createSale: async (items, branchId, userId, paymentType, discountAmount = 0, paymentDetails, notes) => {
+    const sale = await salesService.createSale(items, branchId, userId, paymentType, discountAmount, paymentDetails, notes);
     set(state => ({
       sales: [sale, ...state.sales]
     }));

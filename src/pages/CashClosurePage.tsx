@@ -45,6 +45,7 @@ const CashClosurePage: React.FC = () => {
   const [isLoadingCashFlow, setIsLoadingCashFlow] = useState(false);
   const [showCashMovementModal, setShowCashMovementModal] = useState(false);
   const [movementType, setMovementType] = useState<'INGRESO' | 'EGRESO'>('INGRESO');
+  const [movementPaymentType, setMovementPaymentType] = useState<'EFECTIVO' | 'QR' | 'TARJETA'>('EFECTIVO');
   const [movementAmount, setMovementAmount] = useState('');
   const [movementDescription, setMovementDescription] = useState('');
 
@@ -185,6 +186,7 @@ const loadTotals = async () => {
         activeBranch.id,
         user.id,
         movementType,
+        movementPaymentType,
         parseFloat(movementAmount),
         movementDescription
       );
@@ -192,6 +194,7 @@ const loadTotals = async () => {
       // Limpiar formulario
       setMovementAmount('');
       setMovementDescription('');
+      setMovementPaymentType('EFECTIVO');
       setShowCashMovementModal(false);
       
       // Recargar datos
@@ -1436,6 +1439,50 @@ const loadTotals = async () => {
                     <option value="INGRESO">Ingreso</option>
                     <option value="EGRESO">Egreso</option>
                   </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Método de Pago
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setMovementPaymentType('EFECTIVO')}
+                      className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                        movementPaymentType === 'EFECTIVO'
+                          ? 'bg-green-500 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      <Wallet className="h-4 w-4 mx-auto mb-1" />
+                      Efectivo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMovementPaymentType('QR')}
+                      className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                        movementPaymentType === 'QR'
+                          ? 'bg-green-500 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      <QrCode className="h-4 w-4 mx-auto mb-1" />
+                      QR
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMovementPaymentType('TARJETA')}
+                      className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                        movementPaymentType === 'TARJETA'
+                          ? 'bg-green-500 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      <CreditCard className="h-4 w-4 mx-auto mb-1" />
+                      Tarjeta
+                    </button>
+                  </div>
                 </div>
 
                 <div>

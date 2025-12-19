@@ -57,6 +57,7 @@ export interface Sale {
   total: number;
   subtotal?: number;
   discount_amount?: number;
+  notes?: string;
   payment_details?: {
     efectivo?: number;
     qr?: number;
