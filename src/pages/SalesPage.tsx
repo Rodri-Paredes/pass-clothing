@@ -9,7 +9,7 @@ import EditPaymentMethodModal from '../components/sales/EditPaymentMethodModal';
 import { useProductStore } from '../store/productStore';
 import { useSalesStore } from '../store/salesStore';
 import { useAuthStore } from '../store/authStore';
-import { CATEGORIES } from '../lib/constants';
+import { CATEGORIES, SALE_CHANNELS } from '../lib/constants';
 import { usePaginatedProducts } from '../hooks/usePaginatedProducts';
 
 interface CartItem {
@@ -40,6 +40,8 @@ const SalesPage: React.FC = () => {
   });
   const [editPaymentModalOpen, setEditPaymentModalOpen] = useState(false);
   const [saleToEdit, setSaleToEdit] = useState<any | null>(null);
+  const [saleChannel, setSaleChannel] = useState<'TIENDA' | 'WEB' | 'REDES_SOCIALES' | 'TELEFONO' | 'DELIVERY'>('TIENDA');
+  const [filterChannel, setFilterChannel] = useState<string>('');
 
   useEffect(() => {
     if (activeBranch) {
@@ -158,11 +160,12 @@ const SalesPage: React.FC = () => {
       }
 
       // Pass paymentType, discountAmount, paymentDetails, and notes to createSale
-      await createSale(items, activeBranch.id, user.id, paymentType, discountAmount, paymentDetails, saleNotes);
+      await createSale(items, activeBranch.id, user.id, paymentType, discountAmount, paymentDetails, saleNotes, saleChannel);
       setCart([]);
       setDiscountAmount(0);
       setSaleNotes('');
       setMixedPaymentDetails({ efectivo: 0, qr: 0, tarjeta: 0 });
+      setSaleChannel('TIENDA');
       // Recargar stock después de la venta
       if (activeBranch) {
         loadStockByBranch(activeBranch.id);
@@ -566,6 +569,30 @@ const SalesPage: React.FC = () => {
                       </div>
                     )}
 
+                    {/* Selector de canal de venta */}
+                    <div className="mb-6">
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className="text-base font-semibold text-gray-700">Canal de venta:</span>
+                        <span className="text-xs text-gray-400">(¿Dónde se realizó la venta?)</span>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                        {SALE_CHANNELS.map((channel) => (
+                          <button
+                            key={channel.value}
+                            type="button"
+                            className={`flex items-center justify-center gap-2 p-2.5 rounded-lg border-2 transition-all shadow-sm cursor-pointer text-sm
+                              ${saleChannel === channel.value 
+                                ? `border-${channel.color}-500 bg-${channel.color}-50` 
+                                : 'border-gray-200 bg-white'} hover:border-${channel.color}-400`}
+                            onClick={() => setSaleChannel(channel.value as any)}
+                          >
+                            <span className="text-lg">{channel.icon}</span>
+                            <span className="font-semibold">{channel.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                     {/* Total y acciones */}
                     <div className="flex flex-col gap-4">
                       <div className="space-y-2">
@@ -618,10 +645,27 @@ const SalesPage: React.FC = () => {
       {/* Historial de ventas */}
       <Card className="shadow-md md:shadow-lg">
         <div className="p-4 md:p-6">
-          <h2 className="text-lg md:text-xl font-semibold mb-4">Historial de Ventas</h2>
-          {sales.length > 0 ? (
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+            <h2 className="text-lg md:text-xl font-semibold">Historial de Ventas</h2>
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-600 font-medium">Filtrar por canal:</label>
+              <select
+                value={filterChannel}
+                onChange={(e) => setFilterChannel(e.target.value)}
+                className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">Todos</option>
+                {SALE_CHANNELS.map((channel) => (
+                  <option key={channel.value} value={channel.value}>
+                    {channel.icon} {channel.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          {sales.filter(sale => !filterChannel || sale.sale_channel === filterChannel).length > 0 ? (
             <div className="space-y-4 md:space-y-6 max-h-[28rem] md:max-h-[32rem] overflow-y-auto">
-              {sales.map((sale) => (
+              {sales.filter(sale => !filterChannel || sale.sale_channel === filterChannel).map((sale) => (
                 <div
                   key={sale.id}
                   className="flex flex-col md:flex-row md:items-center justify-between gap-2 md:gap-6 p-4 md:p-5 bg-white rounded-2xl shadow border border-gray-100 cursor-pointer hover:bg-blue-50 transition-all"
@@ -646,6 +690,11 @@ const SalesPage: React.FC = () => {
                           <span className="bg-gray-100 px-2 py-1 rounded text-gray-700 font-medium">Vendedor: {sale.user.name}</span>
                         )}
                         <span className={`px-2 py-1 rounded font-bold text-xs md:text-sm ${sale.payment_type === 'EFECTIVO' ? 'bg-green-100 text-green-700' : sale.payment_type === 'QR' ? 'bg-indigo-100 text-indigo-700' : 'bg-pink-100 text-pink-700'}`}>{sale.payment_type}</span>
+                        {sale.sale_channel && (
+                          <span className="px-2 py-1 rounded font-medium text-xs bg-gray-50 border border-gray-200">
+                            {SALE_CHANNELS.find(ch => ch.value === sale.sale_channel)?.icon || '🏪'} {SALE_CHANNELS.find(ch => ch.value === sale.sale_channel)?.label || sale.sale_channel}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -715,6 +764,14 @@ const SalesPage: React.FC = () => {
                   </button>
                 </div>
               </div>
+              {selectedSale.sale_channel && (
+                <div className="flex flex-col gap-2">
+                  <span className="text-xs md:text-sm text-gray-500">Canal</span>
+                  <span className="font-semibold px-3 py-1 rounded text-base md:text-lg bg-gray-100">
+                    {SALE_CHANNELS.find(ch => ch.value === selectedSale.sale_channel)?.icon || '🏪'} {SALE_CHANNELS.find(ch => ch.value === selectedSale.sale_channel)?.label || selectedSale.sale_channel}
+                  </span>
+                </div>
+              )}
               <div className="flex flex-col gap-2">
                 <span className="text-xs md:text-sm text-gray-500">Total</span>
                 <span className="font-extrabold text-blue-700 text-xl md:text-2xl">${selectedSale.total.toFixed(2)}</span>

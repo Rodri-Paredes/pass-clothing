@@ -51,6 +51,7 @@ export interface Stock {
 
 export interface Sale {
   payment_type: 'EFECTIVO' | 'QR' | 'TARJETA' | 'MIXTO';
+  sale_channel: 'TIENDA' | 'WEB' | 'REDES_SOCIALES' | 'TELEFONO' | 'DELIVERY';
   id: string;
   user_id: string;
   branch_id: string;

@@ -26,6 +26,14 @@ export const ROLES = {
   VENDEDOR: 'vendedor'
 } as const;
 
+export const SALE_CHANNELS = [
+  { value: 'TIENDA', label: 'Tienda', icon: '🏪', color: 'blue' },
+  { value: 'WEB', label: 'Web', icon: '🌐', color: 'purple' },
+  { value: 'REDES_SOCIALES', label: 'Redes Sociales', icon: '📱', color: 'pink' },
+  { value: 'TELEFONO', label: 'Teléfono', icon: '📞', color: 'green' },
+  { value: 'DELIVERY', label: 'Delivery', icon: '🚚', color: 'orange' }
+] as const;
+
 export const LOW_STOCK_THRESHOLD = 5;
 
 /**
