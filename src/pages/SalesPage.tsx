@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plus, ShoppingCart, Calendar, Search, Package, Minus, CheckCircle } from 'lucide-react';
+import { Plus, ShoppingCart, Calendar, Search, Package, Minus, CheckCircle, Edit } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
 import SalesForm from '../components/sales/SalesForm';
+import EditPaymentMethodModal from '../components/sales/EditPaymentMethodModal';
 import { useProductStore } from '../store/productStore';
 import { useSalesStore } from '../store/salesStore';
 import { useAuthStore } from '../store/authStore';
@@ -18,7 +19,7 @@ interface CartItem {
 }
 
 const SalesPage: React.FC = () => {
-  const { sales, loadSalesByBranch, createSale } = useSalesStore();
+  const { sales, loadSalesByBranch, createSale, updatePaymentMethod } = useSalesStore();
   const { activeBranch, user } = useAuthStore();
   const { stock, loadStockByBranch } = useProductStore();
   const [showSalesForm, setShowSalesForm] = useState(false);
@@ -37,6 +38,8 @@ const SalesPage: React.FC = () => {
     qr: 0,
     tarjeta: 0
   });
+  const [editPaymentModalOpen, setEditPaymentModalOpen] = useState(false);
+  const [saleToEdit, setSaleToEdit] = useState<any | null>(null);
 
   useEffect(() => {
     if (activeBranch) {
@@ -697,7 +700,20 @@ const SalesPage: React.FC = () => {
               </div>
               <div className="flex flex-col gap-2">
                 <span className="text-xs md:text-sm text-gray-500">Tipo de Pago</span>
-                <span className={`font-bold px-3 py-1 rounded text-base md:text-lg ${selectedSale.payment_type === 'EFECTIVO' ? 'bg-green-100 text-green-700' : selectedSale.payment_type === 'QR' ? 'bg-indigo-100 text-indigo-700' : 'bg-pink-100 text-pink-700'}`}>{selectedSale.payment_type}</span>
+                <div className="flex items-center gap-2">
+                  <span className={`font-bold px-3 py-1 rounded text-base md:text-lg ${selectedSale.payment_type === 'EFECTIVO' ? 'bg-green-100 text-green-700' : selectedSale.payment_type === 'QR' ? 'bg-indigo-100 text-indigo-700' : 'bg-pink-100 text-pink-700'}`}>{selectedSale.payment_type}</span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSaleToEdit(selectedSale);
+                      setEditPaymentModalOpen(true);
+                    }}
+                    className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                    title="Editar método de pago"
+                  >
+                    <Edit className="h-4 w-4 text-gray-600" />
+                  </button>
+                </div>
               </div>
               <div className="flex flex-col gap-2">
                 <span className="text-xs md:text-sm text-gray-500">Total</span>
@@ -738,6 +754,27 @@ const SalesPage: React.FC = () => {
           </Button>
         </div>
       </Modal>
+
+      {/* Modal para editar método de pago */}
+      {saleToEdit && (
+        <EditPaymentMethodModal
+          isOpen={editPaymentModalOpen}
+          onClose={() => {
+            setEditPaymentModalOpen(false);
+            setSaleToEdit(null);
+          }}
+          sale={saleToEdit}
+          onSave={async (saleId, newPaymentType, paymentDetails) => {
+            await updatePaymentMethod(saleId, newPaymentType, paymentDetails);
+            if (activeBranch) {
+              await loadSalesByBranch(activeBranch.id);
+            }
+            setEditPaymentModalOpen(false);
+            setSaleToEdit(null);
+            setSelectedSale(null);
+          }}
+        />
+      )}
     </div>
   );
 };

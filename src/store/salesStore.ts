@@ -22,6 +22,15 @@ interface SalesState {
     },
     notes?: string
   ) => Promise<Sale>;
+  updatePaymentMethod: (
+    saleId: string,
+    newPaymentType: 'QR' | 'EFECTIVO' | 'TARJETA' | 'MIXTO',
+    paymentDetails?: {
+      efectivo?: number;
+      qr?: number;
+      tarjeta?: number;
+    }
+  ) => Promise<Sale>;
   getSalesWithDiscounts: (branchId: string, date: string) => Promise<SalesWithDiscounts>;
   getMixedPaymentBreakdown: (branchId: string, date: string) => Promise<MixedPaymentBreakdown[]>;
   getPreviousMonthRevenueReport: (branchId: string) => Promise<MonthlyRevenueReport>;
@@ -63,6 +72,16 @@ export const useSalesStore = create<SalesState>((set) => ({
       sales: [sale, ...state.sales]
     }));
     return sale;
+  },
+
+  updatePaymentMethod: async (saleId, newPaymentType, paymentDetails) => {
+    const updatedSale = await salesService.updatePaymentMethod(saleId, newPaymentType, paymentDetails);
+    set(state => ({
+      sales: state.sales.map(sale => 
+        sale.id === saleId ? updatedSale : sale
+      )
+    }));
+    return updatedSale;
   },
 
   getSalesWithDiscounts: async (branchId: string, date: string) => {

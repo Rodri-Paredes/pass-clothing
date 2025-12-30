@@ -474,6 +474,55 @@ export class SalesService {
 
     return totalItems;
   }
+
+  /**
+   * Actualiza el método de pago de una venta existente
+   */
+  async updatePaymentMethod(
+    saleId: string,
+    newPaymentType: 'QR' | 'EFECTIVO' | 'TARJETA' | 'MIXTO',
+    paymentDetails?: {
+      efectivo?: number;
+      qr?: number;
+      tarjeta?: number;
+    }
+  ): Promise<Sale> {
+    // Obtener la venta actual
+    const { data: currentSale, error: getSaleError } = await supabase
+      .from('sales')
+      .select('*')
+      .eq('id', saleId)
+      .single();
+
+    if (getSaleError) throw getSaleError;
+    if (!currentSale) throw new Error('Venta no encontrada');
+
+    // Preparar los datos de actualización
+    const updateData: any = {
+      payment_type: newPaymentType,
+      updated_at: new Date().toISOString()
+    };
+
+    // Si es pago mixto, agregar los detalles
+    if (newPaymentType === 'MIXTO' && paymentDetails) {
+      updateData.payment_details = paymentDetails;
+    } else {
+      // Si cambia de MIXTO a otro tipo, limpiar payment_details
+      updateData.payment_details = null;
+    }
+
+    // Actualizar la venta
+    const { data: updatedSale, error: updateError } = await supabase
+      .from('sales')
+      .update(updateData)
+      .eq('id', saleId)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
+
+    return updatedSale;
+  }
 }
 
 export const salesService = new SalesService();
