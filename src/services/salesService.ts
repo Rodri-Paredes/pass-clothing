@@ -15,7 +15,7 @@ export class SalesService {
       tarjeta?: number;
     },
     notes?: string,
-    saleChannel: 'TIENDA' | 'WEB' | 'REDES_SOCIALES' | 'TELEFONO' | 'DELIVERY' = 'TIENDA'
+    saleChannel: 'TIENDA' | 'WEB' = 'TIENDA'
   ): Promise<Sale> {
     const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
     const total = Math.max(0, subtotal - discountAmount);

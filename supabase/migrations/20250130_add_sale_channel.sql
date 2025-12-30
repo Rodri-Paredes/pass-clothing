@@ -4,7 +4,7 @@
 -- 1. AGREGAR COLUMNA sale_channel
 ALTER TABLE sales 
 ADD COLUMN IF NOT EXISTS sale_channel text NOT NULL DEFAULT 'TIENDA'
-CHECK (sale_channel IN ('TIENDA', 'WEB', 'REDES_SOCIALES', 'TELEFONO', 'DELIVERY'));
+CHECK (sale_channel IN ('TIENDA', 'WEB'));
 
 -- 2. CREAR ÍNDICE para búsquedas rápidas por canal
 CREATE INDEX IF NOT EXISTS idx_sales_sale_channel ON sales(sale_channel);
@@ -15,7 +15,7 @@ ON sales(branch_id, sale_channel, sale_date DESC);
 
 -- 4. COMENTARIOS
 COMMENT ON COLUMN sales.sale_channel IS 
-  'Canal por el cual se realizó la venta: TIENDA, WEB, REDES_SOCIALES, TELEFONO, DELIVERY';
+  'Canal por el cual se realizó la venta: TIENDA o WEB';
 
 -- 5. FUNCIÓN PARA OBTENER ESTADÍSTICAS POR CANAL
 CREATE OR REPLACE FUNCTION get_sales_by_channel(

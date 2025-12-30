@@ -21,7 +21,7 @@ interface SalesState {
       tarjeta?: number;
     },
     notes?: string,
-    saleChannel?: 'TIENDA' | 'WEB' | 'REDES_SOCIALES' | 'TELEFONO' | 'DELIVERY'
+    saleChannel?: 'TIENDA' | 'WEB'
   ) => Promise<Sale>;
   updatePaymentMethod: (
     saleId: string,

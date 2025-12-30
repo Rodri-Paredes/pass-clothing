@@ -40,7 +40,7 @@ const SalesPage: React.FC = () => {
   });
   const [editPaymentModalOpen, setEditPaymentModalOpen] = useState(false);
   const [saleToEdit, setSaleToEdit] = useState<any | null>(null);
-  const [saleChannel, setSaleChannel] = useState<'TIENDA' | 'WEB' | 'REDES_SOCIALES' | 'TELEFONO' | 'DELIVERY'>('TIENDA');
+  const [saleChannel, setSaleChannel] = useState<'TIENDA' | 'WEB'>('TIENDA');
   const [filterChannel, setFilterChannel] = useState<string>('');
 
   useEffect(() => {
