@@ -6,7 +6,9 @@ import Card from '../components/ui/Card';
 import Modal from '../components/ui/Modal';
 import ProductForm from '../components/products/ProductForm';
 import { DropBadge } from '../components/drops/DropFilter';
+import { DiscountPrice, DiscountBadge } from '../components/discounts/DiscountBadge';
 import { useProductStore } from '../store/productStore';
+import { useDiscountStore } from '../store/discountStore';
 import { useAuthStore } from '../store/authStore';
 import { CATEGORIES } from '../lib/constants';
 import { usePaginatedProducts } from '../hooks/usePaginatedProducts';
@@ -16,6 +18,7 @@ import type { Drop } from '../lib/types';
 const ProductsPage: React.FC = () => {
   const { deleteProduct, toggleProductVisibility } = useProductStore();
   const { user } = useAuthStore();
+  const { loadActiveDiscountsMap, getProductDiscount } = useDiscountStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [showProductForm, setShowProductForm] = useState(false);
@@ -42,6 +45,11 @@ const ProductsPage: React.FC = () => {
   });
 
   const filteredProducts = useMemo(() => items, [items]);
+
+  // Cargar descuentos activos
+  React.useEffect(() => {
+    loadActiveDiscountsMap();
+  }, [loadActiveDiscountsMap]);
 
   // Cargar drops para mostrar información
   React.useEffect(() => {
@@ -191,7 +199,13 @@ const ProductsPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredProducts.map((product) => (
             <Card key={product.id} className="overflow-hidden">
-              <div className="aspect-w-1 aspect-h-1 mb-4">
+              <div className="aspect-w-1 aspect-h-1 mb-4 relative">
+                {/* Badge de descuento sobre la imagen */}
+                {getProductDiscount(product.id) && (
+                  <div className="absolute top-2 left-2 z-10">
+                    <DiscountBadge percentage={getProductDiscount(product.id)!.percentage} size="md" />
+                  </div>
+                )}
                 {product.image_url ? (
                   <img
                     src={product.image_url}
@@ -231,9 +245,23 @@ const ProductsPage: React.FC = () => {
                   <span className="text-xs text-gray-400">Sin tallas</span>
                 )}
                 <div className="flex justify-between items-center pt-2">
-                  <span className="text-lg font-bold text-blue-600">
-                    ${product.price.toFixed(2)}
-                  </span>
+                  {(() => {
+                    const discount = getProductDiscount(product.id);
+                    if (discount) {
+                      return (
+                        <DiscountPrice
+                          originalPrice={product.price}
+                          percentage={discount.percentage}
+                          size="md"
+                        />
+                      );
+                    }
+                    return (
+                      <span className="text-lg font-bold text-blue-600">
+                        ${product.price.toFixed(2)}
+                      </span>
+                    );
+                  })()}
                   <div className="flex space-x-2">
                     {user?.role === 'admin' && (
                       <>

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plus, ShoppingCart, Calendar, Search, Package, Minus, CheckCircle, Edit } from 'lucide-react';
+import { Plus, ShoppingCart, Calendar, Search, Package, Minus, CheckCircle, Edit, Percent } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Modal from '../components/ui/Modal';
@@ -9,6 +9,7 @@ import EditPaymentMethodModal from '../components/sales/EditPaymentMethodModal';
 import { useProductStore } from '../store/productStore';
 import { useSalesStore } from '../store/salesStore';
 import { useAuthStore } from '../store/authStore';
+import { useDiscountStore } from '../store/discountStore';
 import { CATEGORIES, SALE_CHANNELS } from '../lib/constants';
 import { usePaginatedProducts } from '../hooks/usePaginatedProducts';
 
@@ -22,6 +23,7 @@ const SalesPage: React.FC = () => {
   const { sales, loadSalesByBranch, createSale, updatePaymentMethod } = useSalesStore();
   const { activeBranch, user } = useAuthStore();
   const { stock, loadStockByBranch } = useProductStore();
+  const { activeDiscountsMap, loadActiveDiscountsMap } = useDiscountStore();
   const [showSalesForm, setShowSalesForm] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -49,6 +51,11 @@ const SalesPage: React.FC = () => {
       loadStockByBranch(activeBranch.id);
     }
   }, [activeBranch, loadSalesByBranch, loadStockByBranch]);
+
+  // Cargar descuentos activos
+  useEffect(() => {
+    loadActiveDiscountsMap();
+  }, [loadActiveDiscountsMap]);
 
   const {
     items,
@@ -88,10 +95,24 @@ const SalesPage: React.FC = () => {
     });
   }, [items, stock]);
 
+  // Función helper para obtener precio con descuento
+  const getDiscountedPrice = (productId: string, originalPrice: number) => {
+    const discountInfo = activeDiscountsMap.get(productId);
+    if (discountInfo) {
+      const discountAmount = originalPrice * (discountInfo.percentage / 100);
+      return originalPrice - discountAmount;
+    }
+    return originalPrice;
+  };
+
   const handleAddToCart = (product: any) => {
     // product must have variant_id
     const variantStock = stock.find(s => s.variant_id === product.variant_id);
     if (!variantStock || variantStock.quantity === 0) return;
+
+    // Aplicar descuento si existe
+    const finalPrice = getDiscountedPrice(product.id, product.price);
+    const productWithDiscount = { ...product, finalPrice, originalPrice: product.price };
 
     setCart((prev) => {
       const existingItem = prev.find((item) => item.product.id === product.id && item.product.variant_id === product.variant_id);
@@ -106,7 +127,7 @@ const SalesPage: React.FC = () => {
         return prev;
       }
       return [...prev, { 
-        product, 
+        product: productWithDiscount, 
         quantity: 1, 
         availableStock: variantStock.quantity 
       }];
@@ -135,12 +156,30 @@ const SalesPage: React.FC = () => {
   };
 
   const getTotalAmount = () => {
-    const subtotal = cart.reduce((total, item) => total + (item.quantity * item.product.price), 0);
+    const subtotal = cart.reduce((total, item) => {
+      // Usar el precio final (con descuento si existe)
+      const price = item.product.finalPrice || item.product.price;
+      return total + (item.quantity * price);
+    }, 0);
     return Math.max(0, subtotal - discountAmount);
   };
 
   const getSubtotal = () => {
-    return cart.reduce((total, item) => total + (item.quantity * item.product.price), 0);
+    return cart.reduce((total, item) => {
+      // Usar el precio final (con descuento si existe)
+      const price = item.product.finalPrice || item.product.price;
+      return total + (item.quantity * price);
+    }, 0);
+  };
+
+  const getTotalDiscountFromProducts = () => {
+    return cart.reduce((total, item) => {
+      if (item.product.originalPrice && item.product.finalPrice) {
+        const discountPerUnit = item.product.originalPrice - item.product.finalPrice;
+        return total + (discountPerUnit * item.quantity);
+      }
+      return total;
+    }, 0);
   };
 
   const handleProcessSale = async () => {
@@ -151,7 +190,7 @@ const SalesPage: React.FC = () => {
       const items = cart.map(item => ({
         variantId: item.product.variant_id,
         quantity: item.quantity,
-        unitPrice: item.product.price
+        unitPrice: item.product.finalPrice || item.product.price // Usar precio con descuento
       }));
 
       let paymentDetails = undefined;
@@ -251,12 +290,26 @@ const SalesPage: React.FC = () => {
                       (product.variants || []).map((variant: any) => {
                         const variantStock = stock.find(s => s.variant_id === variant.id);
                         const cartItem = cart.find(item => item.product.id === product.id && item.product.variant_id === variant.id);
+                        const discountInfo = activeDiscountsMap.get(product.id);
+                        const hasDiscount = !!discountInfo;
+                        const finalPrice = hasDiscount ? getDiscountedPrice(product.id, product.price) : product.price;
+                        
                         return (
                           <div
                             key={variant.id}
-                            className="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow cursor-pointer bg-white"
+                            className="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow cursor-pointer bg-white relative"
                             onClick={() => handleAddToCart({ ...product, variant_id: variant.id, size: variant.size, price: product.price })}
                           >
+                            {/* Badge de descuento */}
+                            {hasDiscount && (
+                              <div className="absolute top-2 right-2 z-10">
+                                <div className="bg-red-500 text-white px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1 shadow-lg">
+                                  <Percent className="h-3 w-3" />
+                                  -{discountInfo.percentage}%
+                                </div>
+                              </div>
+                            )}
+                            
                             <div className="aspect-square bg-gray-100 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
                               {product.image_url ? (
                                 <img
@@ -273,9 +326,22 @@ const SalesPage: React.FC = () => {
                             </h3>
                             <p className="text-xs text-gray-600 mb-2">{product.category} - Talla: {variant.size}</p>
                             <div className="flex justify-between items-center">
-                              <span className="font-bold text-blue-600">
-                                ${product.price.toFixed(2)}
-                              </span>
+                              <div className="flex flex-col">
+                                {hasDiscount ? (
+                                  <>
+                                    <span className="text-xs text-gray-400 line-through">
+                                      ${product.price.toFixed(2)}
+                                    </span>
+                                    <span className="font-bold text-green-600">
+                                      ${finalPrice.toFixed(2)}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span className="font-bold text-blue-600">
+                                    ${product.price.toFixed(2)}
+                                  </span>
+                                )}
+                              </div>
                               <span className="text-xs text-gray-500">
                                 Stock: {variantStock?.quantity || 0}
                               </span>
@@ -334,62 +400,81 @@ const SalesPage: React.FC = () => {
               ) : (
                 <>
                   <div className="space-y-4 mb-6 max-h-72 overflow-y-auto pr-1">
-                    {cart.map((item) => (
-                      <div key={item.product.id} className="flex items-center justify-between bg-white rounded-xl shadow p-4 border border-gray-100 hover:shadow-lg transition-shadow">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
-                            {item.product.image_url ? (
-                              <img src={item.product.image_url} alt={item.product.name} className="w-10 h-10 object-cover rounded-full" />
-                            ) : (
-                              <Package className="h-6 w-6 text-gray-400" />
-                            )}
+                    {cart.map((item) => {
+                      const hasDiscount = item.product.originalPrice && item.product.finalPrice && item.product.originalPrice !== item.product.finalPrice;
+                      const priceToShow = item.product.finalPrice || item.product.price;
+                      
+                      return (
+                        <div key={`${item.product.id}-${item.product.variant_id}`} className="flex items-center justify-between bg-white rounded-xl shadow p-4 border border-gray-100 hover:shadow-lg transition-shadow">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center relative">
+                              {item.product.image_url ? (
+                                <img src={item.product.image_url} alt={item.product.name} className="w-10 h-10 object-cover rounded-full" />
+                              ) : (
+                                <Package className="h-6 w-6 text-gray-400" />
+                              )}
+                              {hasDiscount && (
+                                <div className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5">
+                                  <Percent className="h-2.5 w-2.5 text-white" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <h4 className="font-semibold text-gray-900 text-base truncate">{item.product.name}</h4>
+                              <div className="flex flex-col">
+                                {hasDiscount ? (
+                                  <>
+                                    <span className="text-xs text-gray-400 line-through">${item.product.originalPrice.toFixed(2)} c/u</span>
+                                    <span className="text-xs text-green-600 font-medium">${priceToShow.toFixed(2)} c/u (con descuento)</span>
+                                  </>
+                                ) : (
+                                  <span className="text-xs text-gray-500">${priceToShow.toFixed(2)} c/u</span>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-400">Stock: {item.availableStock}</p>
+                            </div>
                           </div>
-                          <div className="min-w-0">
-                            <h4 className="font-semibold text-gray-900 text-base truncate">{item.product.name}</h4>
-                            <p className="text-xs text-gray-500">${item.product.price.toFixed(2)} c/u</p>
-                            <p className="text-xs text-gray-400">Stock: {item.availableStock}</p>
-                          </div>
-                        </div>
-                        <div className="flex flex-col items-end gap-2">
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-col items-end gap-2">
+                            <div className="flex items-center gap-2">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleQuantityChange(item.product.id, item.product.variant_id, item.quantity - 1)}
+                                className="h-8 w-8 p-0 border border-gray-200"
+                              >
+                                <Minus className="h-4 w-4" />
+                              </Button>
+                              <span className="w-10 text-center text-base font-bold bg-gray-50 rounded px-2 border border-gray-200">
+                                {item.quantity}
+                              </span>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleQuantityChange(item.product.id, item.product.variant_id, item.quantity + 1)}
+                                disabled={item.quantity >= item.availableStock}
+                                className="h-8 w-8 p-0 border border-gray-200"
+                              >
+                                <Plus className="h-4 w-4" />
+                              </Button>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-gray-500">Subtotal:</span>
+                              <span className={`font-semibold text-base ${hasDiscount ? 'text-green-600' : 'text-blue-700'}`}>
+                                ${(item.quantity * priceToShow).toFixed(2)}
+                              </span>
+                            </div>
                             <Button
                               size="sm"
-                              variant="ghost"
-                              onClick={() => handleQuantityChange(item.product.id, item.product.variant_id, item.quantity - 1)}
-                              className="h-8 w-8 p-0 border border-gray-200"
+                              variant="danger"
+                              onClick={() => handleRemoveFromCart(item.product.id, item.product.variant_id)}
+                              className="w-full mt-1"
                             >
-                              <Minus className="h-4 w-4" />
-                            </Button>
-                            <span className="w-10 text-center text-base font-bold bg-gray-50 rounded px-2 border border-gray-200">
-                              {item.quantity}
-                            </span>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleQuantityChange(item.product.id, item.product.variant_id, item.quantity + 1)}
-                              disabled={item.quantity >= item.availableStock}
-                              className="h-8 w-8 p-0 border border-gray-200"
-                            >
-                              <Plus className="h-4 w-4" />
+                              Quitar
                             </Button>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-500">Subtotal:</span>
-                            <span className="font-semibold text-blue-700 text-base">
-                              ${(item.quantity * item.product.price).toFixed(2)}
-                            </span>
-                          </div>
-                          <Button
-                            size="sm"
-                            variant="danger"
-                            onClick={() => handleRemoveFromCart(item.product.id, item.product.variant_id)}
-                            className="w-full mt-1"
-                          >
-                            Quitar
-                          </Button>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
 
                   <div className="border-t border-gray-200 pt-4">
@@ -600,9 +685,18 @@ const SalesPage: React.FC = () => {
                           <span>Subtotal:</span>
                           <span>Bs. {getSubtotal().toFixed(2)}</span>
                         </div>
+                        {getTotalDiscountFromProducts() > 0 && (
+                          <div className="flex justify-between text-sm text-green-600 font-medium">
+                            <span className="flex items-center gap-1">
+                              <Percent className="h-3 w-3" />
+                              Descuentos aplicados:
+                            </span>
+                            <span>- Bs. {getTotalDiscountFromProducts().toFixed(2)}</span>
+                          </div>
+                        )}
                         {discountAmount > 0 && (
-                          <div className="flex justify-between text-sm text-green-600">
-                            <span>Descuento:</span>
+                          <div className="flex justify-between text-sm text-orange-600">
+                            <span>Descuento adicional:</span>
                             <span>- Bs. {discountAmount.toFixed(2)}</span>
                           </div>
                         )}

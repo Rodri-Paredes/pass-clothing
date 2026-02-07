@@ -9,7 +9,8 @@ import {
   Settings,
   Store,
   X,
-  Star
+  Star,
+  Percent
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 
@@ -25,6 +26,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Productos', href: '/products', icon: Package },
     { name: 'Drops', href: '/drops', icon: Star },
+    { name: 'Descuentos', href: '/discounts', icon: Percent },
     { name: 'Ventas', href: '/sales', icon: ShoppingCart },
     /* {
       name: 'Flujo de Caja',

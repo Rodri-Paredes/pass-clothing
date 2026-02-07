@@ -4,6 +4,7 @@ import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Modal from '../components/ui/Modal';
 import * as DropComponents from '../components/drops/DropComponents';
+import { DropProductManager } from '../components/drops/DropProductManager';
 import { dropsService } from '../services/dropsService';
 import type { Drop, DropStats } from '../lib/types';
 
@@ -24,6 +25,7 @@ const DropsPage: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showProductManager, setShowProductManager] = useState(false);
   const [selectedDrop, setSelectedDrop] = useState<Drop | null>(null);
   
   // Estados para filtros
@@ -296,8 +298,8 @@ const DropsPage: React.FC = () => {
                   setShowDeleteModal(true);
                 }}
                 onView={(drop) => {
-                  // TODO: Implementar vista de detalles del drop
-                  console.log('View drop:', drop);
+                  setSelectedDrop(drop);
+                  setShowProductManager(true);
                 }}
               />
             </div>
@@ -380,6 +382,30 @@ const DropsPage: React.FC = () => {
             </Button>
           </div>
         </div>
+      </Modal>
+
+      {/* Modal de gestión de productos */}
+      <Modal
+        isOpen={showProductManager}
+        onClose={() => {
+          setShowProductManager(false);
+          setSelectedDrop(null);
+          loadDrops(); // Recargar para actualizar contadores
+        }}
+        title="🎯 Gestionar Productos del Drop"
+        size="xl"
+      >
+        {selectedDrop && (
+          <DropProductManager
+            dropId={selectedDrop.id}
+            dropName={selectedDrop.name}
+            onClose={() => {
+              setShowProductManager(false);
+              setSelectedDrop(null);
+              loadDrops(); // Recargar para actualizar contadores
+            }}
+          />
+        )}
       </Modal>
     </div>
   );

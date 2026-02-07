@@ -290,3 +290,61 @@ export interface DropStats {
   total_products_in_drops: number;
   upcoming_drops: number;
 }
+
+// Tipos para el sistema de descuentos por porcentaje
+export interface Discount {
+  id: string;
+  name: string;
+  percentage: number;
+  start_date: string;
+  end_date: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  discount_products?: DiscountProduct[];
+  discount_drops?: DiscountDrop[];
+  product_count?: number;
+  drop_count?: number;
+}
+
+export interface DiscountProduct {
+  id: string;
+  discount_id: string;
+  product_id: string;
+  created_at: string;
+  product?: Product;
+  discount?: Discount;
+}
+
+export interface DiscountDrop {
+  id: string;
+  discount_id: string;
+  drop_id: string;
+  created_at: string;
+  drop?: Drop;
+  discount?: Discount;
+}
+
+export interface DiscountWithProducts extends Discount {
+  discount_products: DiscountProduct[];
+  products: Product[];
+}
+
+export interface DiscountWithDrops extends Discount {
+  discount_drops: DiscountDrop[];
+  drops: Drop[];
+}
+
+export type DiscountStatus = 'active' | 'scheduled' | 'expired';
+
+export interface ProductWithDiscount extends Product {
+  active_discount?: {
+    discount_id: string;
+    discount_name: string;
+    percentage: number;
+    discounted_price: number;
+    start_date: string;
+    end_date: string;
+    source: 'product' | 'drop';
+  } | null;
+}
