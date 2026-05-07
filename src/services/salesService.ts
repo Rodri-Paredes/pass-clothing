@@ -169,7 +169,6 @@ export class SalesService {
           variant:product_variants(
             id,
             size,
-            sku,
             product:products(id, name, price, category)
           )
         )

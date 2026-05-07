@@ -107,7 +107,6 @@ export class ProductService {
           id,
           product_id,
           size,
-          sku,
           created_at
         )
       `)
@@ -221,7 +220,6 @@ export class ProductService {
         variant:product_variants(
           id,
           size,
-          sku,
           product:products(
             id,
             name,
@@ -254,8 +252,7 @@ export class ProductService {
         updated_at,
         variant:product_variants(
           id,
-          size,
-          sku
+          size
         ),
         branch:branches(
           id,
