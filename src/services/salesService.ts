@@ -141,17 +141,36 @@ export class SalesService {
   }
 
   async getSalesByBranch(branchId: string): Promise<Sale[]> {
+    // ✅ OPTIMIZADO: Solo campos necesarios
     const { data, error } = await supabase
       .from('sales')
       .select(`
-        *,
-        user:users(name),
-        branch:branches(name),
+        id,
+        user_id,
+        branch_id,
+        subtotal,
+        discount_amount,
+        total,
+        sale_date,
+        payment_type,
+        payment_details,
+        sale_channel,
+        notes,
+        created_at,
+        user:users(id, name),
+        branch:branches(id, name),
         sale_items(
-          *,
+          id,
+          sale_id,
+          variant_id,
+          quantity,
+          unit_price,
+          subtotal,
           variant:product_variants(
-            *,
-            product:products(name)
+            id,
+            size,
+            sku,
+            product:products(id, name, price, category)
           )
         )
       `)
@@ -159,7 +178,7 @@ export class SalesService {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return data || [];
+    return data as any || [];
   }
 
   async getSalesWithDiscounts(branchId: string, date: string): Promise<SalesWithDiscounts> {
@@ -249,14 +268,16 @@ export class SalesService {
     }
 
     // Top product (simplified query)
+    // ✅ OPTIMIZADO: Solo campos necesarios
     const { data: topProductData, error: topProductError } = await supabase
       .from('sale_items')
       .select(`
         variant_id,
         quantity,
         variant:product_variants(
-          *,
-          product:products(name)
+          id,
+          size,
+          product:products(id, name)
         )
       `)
       .limit(1);
@@ -264,13 +285,17 @@ export class SalesService {
     if (topProductError) throw topProductError;
 
     // Low stock products
+    // ✅ OPTIMIZADO: Solo campos necesarios
     const { data: lowStockData, error: lowStockError } = await supabase
       .from('stock')
       .select(`
+        id,
+        variant_id,
         quantity,
         variant:product_variants(
-          *,
-          product:products(name)
+          id,
+          size,
+          product:products(id, name, price)
         )
       `)
       .eq('branch_id', branchId)

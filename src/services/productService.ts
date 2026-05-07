@@ -26,11 +26,17 @@ export class ProductService {
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
+    // ✅ OPTIMIZADO: Solo campos esenciales para lista
     let query = supabase
       .from('products')
       .select(`
-        *,
-        variants:product_variants(*)
+        id,
+        name,
+        price,
+        category,
+        is_visible,
+        drop_id,
+        created_at
       `)
       .order('created_at', { ascending: false })
       .range(from, to);
@@ -63,11 +69,18 @@ export class ProductService {
     return { items, hasMore };
   }
   async getProducts(includeHidden: boolean = false): Promise<Product[]> {
+    // ✅ OPTIMIZADO: Solo campos esenciales para listas
+    // Para detalles completos, usar getProduct(id)
     let query = supabase
       .from('products')
       .select(`
-        *,
-        variants:product_variants(*)
+        id,
+        name,
+        price,
+        category,
+        is_visible,
+        drop_id,
+        created_at
       `)
       .order('created_at', { ascending: false });
 
@@ -78,15 +91,22 @@ export class ProductService {
 
     const { data, error } = await query;
     if (error) throw error;
-    return data || [];
+    return data as any || [];
   }
 
   async getProduct(id: string): Promise<Product | null> {
+    // ✅ Aquí SÍ traemos todo: detalles completos solo cuando se necesitan
     const { data, error } = await supabase
       .from('products')
       .select(`
         *,
-        variants:product_variants(*)
+        variants:product_variants(
+          id,
+          product_id,
+          size,
+          sku,
+          created_at
+        )
       `)
       .eq('id', id)
       .single();
@@ -185,32 +205,64 @@ export class ProductService {
   }
 
   async getStockByBranch(branchId: string): Promise<Stock[]> {
+    // ✅ OPTIMIZADO: Solo campos necesarios
     const { data, error } = await supabase
       .from('stock')
       .select(`
-        *,
-        variant:product_variants(*),
-        branch:branches(*)
+        id,
+        variant_id,
+        branch_id,
+        quantity,
+        created_at,
+        updated_at,
+        variant:product_variants(
+          id,
+          size,
+          sku,
+          product:products(
+            id,
+            name,
+            price,
+            category
+          )
+        ),
+        branch:branches(
+          id,
+          name
+        )
       `)
       .eq('branch_id', branchId)
       .order('quantity', { ascending: true });
 
     if (error) throw error;
-    return data || [];
+    return data as any || [];
   }
 
   async getStockByProduct(variantId: string): Promise<Stock[]> {
+    // ✅ OPTIMIZADO: Solo campos necesarios
     const { data, error } = await supabase
       .from('stock')
       .select(`
-        *,
-        variant:product_variants(*),
-        branch:branches(*)
+        id,
+        variant_id,
+        branch_id,
+        quantity,
+        created_at,
+        updated_at,
+        variant:product_variants(
+          id,
+          size,
+          sku
+        ),
+        branch:branches(
+          id,
+          name
+        )
       `)
       .eq('variant_id', variantId);
 
     if (error) throw error;
-    return data || [];
+    return data as any || [];
   }
 
   async updateStock(variantId: string, branchId: string, quantity: number): Promise<void> {

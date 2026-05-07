@@ -8,37 +8,34 @@ export const discountService = {
 
   /** Obtener todos los descuentos */
   async getAllDiscounts(): Promise<Discount[]> {
+    // ✅ OPTIMIZADO: Una sola query con agregaciones
+    // Trae solo campos esenciales + counts en una consulta
     const { data, error } = await supabase
       .from('discounts')
-      .select('*')
+      .select(`
+        id,
+        name,
+        percentage,
+        start_date,
+        end_date,
+        is_active,
+        created_at,
+        discount_products(count),
+        discount_drops(count)
+      `)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
     if (!data) return [];
 
-    // Contar productos y drops por descuento
-    const discountsWithCount = await Promise.all(
-      data.map(async (discount) => {
-        const [{ count: productCount }, { count: dropCount }] = await Promise.all([
-          supabase
-            .from('discount_products')
-            .select('*', { count: 'exact', head: true })
-            .eq('discount_id', discount.id),
-          supabase
-            .from('discount_drops')
-            .select('*', { count: 'exact', head: true })
-            .eq('discount_id', discount.id),
-        ]);
-
-        return {
-          ...discount,
-          product_count: productCount || 0,
-          drop_count: dropCount || 0,
-        };
-      })
-    );
-
-    return discountsWithCount;
+    // Mapear contadores desde los joins
+    return data.map(d => ({
+      ...d,
+      product_count: d.discount_products?.[0]?.count || 0,
+      drop_count: d.discount_drops?.[0]?.count || 0,
+      discount_products: [] as any,
+      discount_drops: [] as any,
+    })) as Discount[];
   },
 
   /** Obtener un descuento por ID con sus productos y drops */
@@ -262,30 +259,47 @@ export const discountService = {
 
   /** Obtener productos de un descuento */
   async getDiscountProducts(discountId: string): Promise<DiscountProduct[]> {
+    // ✅ OPTIMIZADO: Solo campos necesarios
     const { data, error } = await supabase
       .from('discount_products')
       .select(`
-        *,
-        product:products(id, name, price, image_url, category)
+        id,
+        discount_id,
+        product_id,
+        created_at,
+        product:products(
+          id,
+          name,
+          price,
+          category
+        )
       `)
       .eq('discount_id', discountId);
 
     if (error) throw error;
-    return data || [];
+    return data as any || [];
   },
 
   /** Obtener drops de un descuento */
   async getDiscountDrops(discountId: string): Promise<DiscountDrop[]> {
+    // ✅ OPTIMIZADO: Solo campos necesarios
     const { data, error } = await supabase
       .from('discount_drops')
       .select(`
-        *,
-        drop:drops(id, name, image_url, status, is_featured)
+        id,
+        discount_id,
+        drop_id,
+        created_at,
+        drop:drops(
+          id,
+          name,
+          status
+        )
       `)
       .eq('discount_id', discountId);
 
     if (error) throw error;
-    return data || [];
+    return data as any || [];
   },
 
   /** Obtener el descuento activo de un producto específico (directo o por drop) */
