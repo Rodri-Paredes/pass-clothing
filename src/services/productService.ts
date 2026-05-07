@@ -26,7 +26,7 @@ export class ProductService {
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
-    // ✅ OPTIMIZADO: Solo campos esenciales para lista
+    // ✅ OPTIMIZADO: campos para lista con imagen y tallas
     let query = supabase
       .from('products')
       .select(`
@@ -34,9 +34,11 @@ export class ProductService {
         name,
         price,
         category,
+        image_url,
         is_visible,
         drop_id,
-        created_at
+        created_at,
+        variants:product_variants(id, size)
       `)
       .order('created_at', { ascending: false })
       .range(from, to);
@@ -69,8 +71,7 @@ export class ProductService {
     return { items, hasMore };
   }
   async getProducts(includeHidden: boolean = false): Promise<Product[]> {
-    // ✅ OPTIMIZADO: Solo campos esenciales para listas
-    // Para detalles completos, usar getProduct(id)
+    // ✅ OPTIMIZADO: campos para lista con imagen y tallas
     let query = supabase
       .from('products')
       .select(`
@@ -78,9 +79,11 @@ export class ProductService {
         name,
         price,
         category,
+        image_url,
         is_visible,
         drop_id,
-        created_at
+        created_at,
+        variants:product_variants(id, size)
       `)
       .order('created_at', { ascending: false });
 
