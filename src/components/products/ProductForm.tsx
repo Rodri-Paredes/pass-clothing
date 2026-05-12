@@ -253,6 +253,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
       onClose();
     } catch (error) {
       console.error('Error saving product:', error);
+      alert(`Error al guardar el producto: ${error instanceof Error ? error.message : 'Error desconocido'}`);
     } finally {
       setIsLoading(false);
     }

@@ -266,75 +266,34 @@ export class ProductService {
   }
 
   async updateStock(variantId: string, branchId: string, quantity: number): Promise<void> {
-    console.log(`🔄 [ProductService] Iniciando actualización de stock - Variante: ${variantId}, Sucursal: ${branchId}, Cantidad: ${quantity}`);
-    
-    let attempts = 0;
-    const maxAttempts = 3;
-    
-    while (attempts < maxAttempts) {
-      attempts++;
-      console.log(`🔄 [ProductService] Intento ${attempts}/${maxAttempts} - Actualizando stock`);
-      
-      try {
-        // Usar transacción explícita para garantizar atomicidad
-        const { error: transactionError } = await supabase.rpc('update_stock_safe', {
-          p_variant_id: variantId,
-          p_branch_id: branchId,
-          p_quantity: quantity
-        });
+    console.log(`🔄 [ProductService] Actualizando stock - Variante: ${variantId}, Sucursal: ${branchId}, Cantidad: ${quantity}`);
 
-        if (transactionError) {
-          console.error(`❌ [ProductService] Error en transacción de stock (intento ${attempts}):`, transactionError);
-          throw transactionError;
-        }
-        
-        // Verificación inmediata después de la actualización
-        console.log(`🔍 [ProductService] Verificando stock actualizado...`);
-        await new Promise(resolve => setTimeout(resolve, 200)); // Pausa más larga para asegurar que la BD se actualice
-        
-        const { data: verificationData, error: verificationError } = await supabase
-          .from('stock')
-          .select('quantity')
-          .eq('variant_id', variantId)
-          .eq('branch_id', branchId)
-          .single();
-        
-        if (verificationError) {
-          console.error(`❌ [ProductService] Error verificando stock (intento ${attempts}):`, verificationError);
-          throw verificationError;
-        }
-        
-        const actualQuantity = verificationData?.quantity || 0;
-        console.log(`📊 [ProductService] Stock verificado - Esperado: ${quantity}, Actual: ${actualQuantity}`);
-        
-        if (actualQuantity === quantity) {
-          console.log(`✅ [ProductService] Stock actualizado exitosamente - Variante: ${variantId}, Sucursal: ${branchId}, Cantidad: ${quantity}`);
-          return; // Éxito, salir del bucle
-        } else {
-          console.warn(`⚠️ [ProductService] Discrepancia detectada - Esperado: ${quantity}, Actual: ${actualQuantity} (intento ${attempts})`);
-          
-          if (attempts === maxAttempts) {
-            // Último intento falló, lanzar error
-            throw new Error(`No se pudo actualizar el stock correctamente después de ${maxAttempts} intentos. Esperado: ${quantity}, Actual: ${actualQuantity}`);
-          }
-          
-          // Esperar antes del siguiente intento
-          console.log(`⏳ [ProductService] Esperando antes del siguiente intento...`);
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-        
-      } catch (error) {
-        console.error(`❌ [ProductService] Error en intento ${attempts}:`, error);
-        
-        if (attempts === maxAttempts) {
-          throw error; // Re-lanzar error en el último intento
-        }
-        
-        // Esperar antes del siguiente intento
-        console.log(`⏳ [ProductService] Esperando antes del siguiente intento...`);
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
+    // Verificar si ya existe un registro de stock para esta variante/sucursal
+    const { data: existing, error: selectError } = await supabase
+      .from('stock')
+      .select('id')
+      .eq('variant_id', variantId)
+      .eq('branch_id', branchId)
+      .maybeSingle();
+
+    if (selectError) throw selectError;
+
+    if (existing) {
+      // Actualizar registro existente
+      const { error } = await supabase
+        .from('stock')
+        .update({ quantity, updated_at: new Date().toISOString() })
+        .eq('id', existing.id);
+      if (error) throw error;
+    } else {
+      // Crear nuevo registro de stock
+      const { error } = await supabase
+        .from('stock')
+        .insert({ variant_id: variantId, branch_id: branchId, quantity });
+      if (error) throw error;
     }
+
+    console.log(`✅ [ProductService] Stock actualizado exitosamente - Variante: ${variantId}, Sucursal: ${branchId}, Cantidad: ${quantity}`);
   }
 
   async uploadProductImage(file: File): Promise<string> {
