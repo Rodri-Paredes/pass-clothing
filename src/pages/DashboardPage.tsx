@@ -1,28 +1,68 @@
 import React, { useEffect, useState } from 'react';
-import { 
-  TrendingUp, 
-  Package, 
+import {
+  TrendingUp,
+  Package,
   ShoppingCart,
-  CalendarRange
+  CalendarRange,
+  ArrowUpRight,
+  AlertTriangle,
+  BarChart2,
+  Zap,
 } from 'lucide-react';
 import { toBoliviaStartOfDay, toBoliviaEndOfDay } from '../lib/constants';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
+import Badge from '../components/ui/Badge';
+import { SkeletonStatGrid } from '../components/ui/Skeleton';
 import { salesService } from '../services/salesService';
 import { useAuthStore } from '../store/authStore';
 import { useSalesStore } from '../store/salesStore';
 import FeaturedDropsSection from '../components/drops/FeaturedDropsSection';
 import type { MonthlyRevenueReport } from '../lib/types';
 
+/* ─── Stat card ─────────────────────────────────────────── */
+interface StatCardProps {
+  label: string;
+  value: string | number;
+  sub: string;
+  icon: React.ElementType;
+  gradient: string;
+  delay?: string;
+}
+
+const StatCard: React.FC<StatCardProps> = ({ label, value, sub, icon: Icon, gradient, delay = '0ms' }) => (
+  <div
+    className={`${gradient} rounded-2xl p-5 text-white shadow-md animate-in`}
+    style={{ animationDelay: delay }}
+  >
+    <div className="flex items-start justify-between mb-3">
+      <div className="p-2 bg-white/15 rounded-xl">
+        <Icon className="h-5 w-5" />
+      </div>
+      <ArrowUpRight className="h-4 w-4 opacity-50" />
+    </div>
+    <p className="text-white/70 text-xs font-medium uppercase tracking-wider mb-0.5">{label}</p>
+    <p className="text-3xl font-bold tracking-tight leading-none">{value}</p>
+    <p className="text-white/60 text-xs mt-1.5">{sub}</p>
+  </div>
+);
+
+/* ─── Custom chart tooltip ───────────────────────────────── */
+const ChartTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-white border border-surface-200 rounded-xl px-3 py-2 shadow-lg text-sm">
+      <p className="text-surface-500 text-xs mb-1">{label}</p>
+      <p className="font-semibold text-surface-900">${Number(payload[0].value).toFixed(2)}</p>
+    </div>
+  );
+};
+
+/* ─── Page ───────────────────────────────────────────────── */
 const DashboardPage: React.FC = () => {
   const { activeBranch } = useAuthStore();
-  const { 
-    dashboardStats, 
-    loadDashboardStats, 
-    isLoading,
-    getDateRangeRevenueReport
-  } = useSalesStore();
+  const { dashboardStats, loadDashboardStats, isLoading, getDateRangeRevenueReport } = useSalesStore();
   const [showAllLowStock, setShowAllLowStock] = useState(false);
   const [customDateRangeReport, setCustomDateRangeReport] = useState<MonthlyRevenueReport | null>(null);
   const [itemsSoldForRange, setItemsSoldForRange] = useState<number | null>(null);
@@ -32,57 +72,32 @@ const DashboardPage: React.FC = () => {
   const [endDate, setEndDate] = useState('');
   const [loadingCustomReport, setLoadingCustomReport] = useState(false);
 
-  const loadCustomDateRangeReport = async () => {
-    if (!activeBranch || !startDate || !endDate) return;
-    
-    setLoadingCustomReport(true);
-    try {
-      const report = await getDateRangeRevenueReport(activeBranch.id, startDate, endDate);
-      setCustomDateRangeReport(report);
-      // traer cantidad de prendas vendidas en el rango
-      try {
-        // Agregar timezone de Bolivia a las fechas
-        const startWithTz = toBoliviaStartOfDay(startDate);
-        const endWithTz = toBoliviaEndOfDay(endDate);
-        const itemsCount = await salesService.getDateRangeItemsSold(activeBranch.id, startWithTz, endWithTz);
-        setItemsSoldForRange(itemsCount);
-      } catch (err) {
-        console.error('Error fetching items sold for range:', err);
-        setItemsSoldForRange(null);
-      }
-    } catch (error) {
-      console.error('Error loading custom date range report:', error);
-    } finally {
-      setLoadingCustomReport(false);
-    }
-  };
-
-  // Helpers for common presets
   const pad = (n: number) => String(n).padStart(2, '0');
-  const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
   const getPresetRange = (key: string) => {
     const now = new Date();
     switch (key) {
-      case 'today': {
-        return { start: fmt(now), end: fmt(now) };
-      }
+      case 'today': return { start: fmt(now), end: fmt(now) };
       case 'month': {
         const start = new Date(now.getFullYear(), now.getMonth(), 1);
-        const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        const end   = new Date(now.getFullYear(), now.getMonth() + 1, 0);
         return { start: fmt(start), end: fmt(end) };
       }
       case 'year': {
-        const start = new Date(now.getFullYear(), 0, 1);
-        const end = new Date(now.getFullYear(), 11, 31);
+        return { start: fmt(new Date(now.getFullYear(), 0, 1)), end: fmt(new Date(now.getFullYear(), 11, 31)) };
+      }
+      case 'pay_current': {
+        const end   = new Date(now.getFullYear(), now.getMonth(), 18);
+        const start = new Date(now.getFullYear(), now.getMonth() - 1, 19);
         return { start: fmt(start), end: fmt(end) };
       }
-      case 'pay_current':
-        return getCurrentPayrollPeriod();
-      case 'pay_previous':
-        return getPreviousPayrollPeriod();
-      default:
-        return null;
+      case 'pay_previous': {
+        const end   = new Date(now.getFullYear(), now.getMonth() - 1, 18);
+        const start = new Date(now.getFullYear(), now.getMonth() - 2, 19);
+        return { start: fmt(start), end: fmt(end) };
+      }
+      default: return null;
     }
   };
 
@@ -95,362 +110,313 @@ const DashboardPage: React.FC = () => {
     setPreset(key);
     setLoadingCustomReport(true);
     try {
-      // Agregar timezone de Bolivia a las fechas
-      const startWithTz = toBoliviaStartOfDay(range.start);
-      const endWithTz = toBoliviaEndOfDay(range.end);
+      const s = toBoliviaStartOfDay(range.start);
+      const e = toBoliviaEndOfDay(range.end);
       const report = await getDateRangeRevenueReport(activeBranch.id, range.start, range.end);
       setCustomDateRangeReport(report);
-      const itemsCount = await salesService.getDateRangeItemsSold(activeBranch.id, startWithTz, endWithTz);
-      setItemsSoldForRange(itemsCount);
-    } catch (err) {
-      console.error('Error applying preset:', err);
-    } finally {
-      setLoadingCustomReport(false);
-    }
+      const items = await salesService.getDateRangeItemsSold(activeBranch.id, s, e);
+      setItemsSoldForRange(items);
+    } catch {}
+    finally { setLoadingCustomReport(false); }
   };
 
-  // Calcula el período de pago: del 19 del mes anterior al 18 del mes actual
-  const getCurrentPayrollPeriod = (): { start: string; end: string } => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth(); // 0-index
-
-    // Si hoy es >= 18 consideramos periodo que va 19 del mes actual? Usamos convención: periodo vigente es 19 del mes previo -> 18 mes actual
-    const end = new Date(year, month, 18);
-    const start = new Date(year, month - 1, 19);
-
-    // Formato YYYY-MM-DD
-    const pad = (n: number) => String(n).padStart(2, '0');
-    const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-    return { start: fmt(start), end: fmt(end) };
+  const loadCustomDateRangeReport = async () => {
+    if (!activeBranch || !startDate || !endDate) return;
+    setLoadingCustomReport(true);
+    try {
+      const s = toBoliviaStartOfDay(startDate);
+      const e = toBoliviaEndOfDay(endDate);
+      const report = await getDateRangeRevenueReport(activeBranch.id, startDate, endDate);
+      setCustomDateRangeReport(report);
+      const items = await salesService.getDateRangeItemsSold(activeBranch.id, s, e);
+      setItemsSoldForRange(items);
+    } catch {}
+    finally { setLoadingCustomReport(false); }
   };
-
-  const getPreviousPayrollPeriod = (): { start: string; end: string } => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
-
-    // Periodo anterior: retroceder un mes completo
-    const end = new Date(year, month - 1, 18);
-    const start = new Date(year, month - 2, 19);
-
-    const pad = (n: number) => String(n).padStart(2, '0');
-    const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-    return { start: fmt(start), end: fmt(end) };
-  };
-
-  
 
   useEffect(() => {
-    if (activeBranch) {
-      loadDashboardStats(activeBranch.id);
-    }
+    if (activeBranch) loadDashboardStats(activeBranch.id);
   }, [activeBranch, loadDashboardStats]);
+
+  const displayRevenue     = customDateRangeReport ? customDateRangeReport.total_revenue    : (dashboardStats?.monthlyTotal       || 0);
+  const displaySalesCount  = customDateRangeReport ? customDateRangeReport.total_sales_count : (dashboardStats?.monthlySalesCount  || 0);
+  const displayItemsSold   = customDateRangeReport ? (itemsSoldForRange ?? 0)               : (dashboardStats?.monthlyItemsSold   || 0);
+  const displayTotalSales  = dashboardStats?.totalSales || 0;
+
+  const rangeLabel = customDateRangeReport
+    ? `${new Date(customDateRangeReport.start_date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })} – ${new Date(customDateRangeReport.end_date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}`
+    : 'Mes actual';
+
+  const PRESETS = [
+    { key: 'month',       label: 'Este mes' },
+    { key: 'year',        label: 'Este año' },
+    { key: 'pay_current', label: 'Período pago' },
+    { key: 'pay_previous',label: 'Período anterior' },
+  ];
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="space-y-6 animate-pulse">
+        <div className="h-8 w-48 bg-surface-200 rounded-lg" />
+        <SkeletonStatGrid />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="h-80 bg-surface-200 rounded-xl" />
+          <div className="h-80 bg-surface-200 rounded-xl" />
+        </div>
       </div>
     );
   }
 
-  // Determinar qué valores mostrar según si hay un rango seleccionado
-  const displayRevenue = customDateRangeReport 
-    ? customDateRangeReport.total_revenue 
-    : (dashboardStats?.monthlyTotal || 0);
-  
-  const displaySalesCount = customDateRangeReport 
-    ? customDateRangeReport.total_sales_count 
-    : (dashboardStats?.monthlySalesCount || 0);
-  
-  const displayItemsSold = customDateRangeReport
-    ? (itemsSoldForRange ?? 0)
-    : (dashboardStats?.monthlyItemsSold || 0);
-
-  const rangeLabel = customDateRangeReport 
-    ? `${new Date(customDateRangeReport.start_date).toLocaleDateString('es-ES')} - ${new Date(customDateRangeReport.end_date).toLocaleDateString('es-ES')}`
-    : 'Mes actual';
-
-  const stats = [
-    {
-      name: 'Total Ingresos',
-      value: `$${displayRevenue.toFixed(2)}`,
-      icon: TrendingUp,
-      color: 'text-green-600',
-      bgColor: 'bg-green-100',
-      subtitle: rangeLabel
-    },
-    {
-      name: 'Número de Ventas',
-      value: displaySalesCount,
-      icon: ShoppingCart,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-100',
-      subtitle: rangeLabel
-    },
-    {
-      name: 'Prendas Vendidas',
-      value: displayItemsSold,
-      icon: Package,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-100',
-      subtitle: rangeLabel
-    }
-  ];
+  const lowStockList = dashboardStats?.lowStockProducts ?? [];
+  const visibleLowStock = showAllLowStock ? lowStockList : lowStockList.slice(0, 5);
 
   return (
     <div className="space-y-6">
+      {/* Page header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-600">
-          {activeBranch ? `Sucursal: ${activeBranch.name}` : 'Sin sucursal seleccionada'}
-        </p>
+        <div>
+          <h1 className="page-title">Dashboard</h1>
+          <p className="page-subtitle">{activeBranch?.name}</p>
+        </div>
+        {dashboardStats?.topProduct && (
+          <div className="hidden sm:flex items-center gap-2 px-3 py-2 bg-brand-50 border border-brand-200 rounded-xl">
+            <Zap className="h-4 w-4 text-brand-600" />
+            <span className="text-xs font-medium text-brand-700">Top: <strong>{dashboardStats.topProduct.name}</strong></span>
+          </div>
+        )}
       </div>
 
-      {/* Selector de Período */}
-      <Card>
-        <div className="p-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">Seleccionar Período</h3>
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant={preset === 'month' ? 'primary' : 'ghost'} onClick={() => applyPreset('month')}>
-              Mes
-            </Button>
-            <Button size="sm" variant={preset === 'year' ? 'primary' : 'ghost'} onClick={() => applyPreset('year')}>
-              Año
-            </Button>
-            <Button size="sm" variant={preset === 'pay_current' ? 'primary' : 'ghost'} onClick={() => applyPreset('pay_current')}>
-              Período de pago actual
-            </Button>
-            <Button size="sm" variant={preset === 'pay_previous' ? 'primary' : 'ghost'} onClick={() => applyPreset('pay_previous')}>
-              Período de pago anterior
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => { setShowDateRangePicker(!showDateRangePicker); }}>
-              {showDateRangePicker ? 'Ocultar rango personalizado' : 'Rango personalizado'}
-            </Button>
+      {/* Period selector */}
+      <Card padding="sm">
+        <div className="p-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-surface-500 px-2">Período:</span>
+            {PRESETS.map(p => (
+              <button
+                key={p.key}
+                onClick={() => applyPreset(p.key)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  preset === p.key
+                    ? 'bg-brand-600 text-white shadow-sm'
+                    : 'text-surface-600 hover:bg-surface-100'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+            <button
+              onClick={() => setShowDateRangePicker(v => !v)}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                showDateRangePicker ? 'bg-surface-800 text-white' : 'text-surface-600 hover:bg-surface-100'
+              }`}
+            >
+              <CalendarRange className="h-3.5 w-3.5" />
+              Personalizado
+            </button>
           </div>
-          
+
           {showDateRangePicker && (
-            <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Fecha Inicio
-                  </label>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Fecha Fin
-                  </label>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <Button
-                    onClick={loadCustomDateRangeReport}
-                    disabled={!startDate || !endDate || loadingCustomReport}
-                    className="w-full"
-                  >
-                    {loadingCustomReport ? 'Cargando...' : 'Aplicar Rango'}
-                  </Button>
-                </div>
+            <div className="mt-3 pt-3 border-t border-surface-100 flex flex-wrap items-end gap-3">
+              <div>
+                <label className="block text-xs font-medium text-surface-600 mb-1">Desde</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="h-8 px-3 text-sm border border-surface-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/25 focus:border-brand-500"
+                />
               </div>
+              <div>
+                <label className="block text-xs font-medium text-surface-600 mb-1">Hasta</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="h-8 px-3 text-sm border border-surface-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/25 focus:border-brand-500"
+                />
+              </div>
+              <Button
+                size="sm"
+                onClick={loadCustomDateRangeReport}
+                disabled={!startDate || !endDate}
+                isLoading={loadingCustomReport}
+              >
+                Aplicar
+              </Button>
             </div>
           )}
         </div>
       </Card>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {stats.map((stat) => (
-          <Card key={stat.name} className="flex items-center space-x-4">
-            <div className={`p-3 rounded-full ${stat.bgColor}`}>
-              <stat.icon className={`h-6 w-6 ${stat.color}`} />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-medium text-gray-600">{stat.name}</p>
-              <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-              <p className="text-xs text-gray-500 mt-1">{stat.subtitle}</p>
-            </div>
-          </Card>
-        ))}
+      {/* Stat cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          label="Ingresos"
+          value={`$${displayRevenue.toFixed(2)}`}
+          sub={rangeLabel}
+          icon={TrendingUp}
+          gradient="bg-gradient-green"
+          delay="0ms"
+        />
+        <StatCard
+          label="Ventas"
+          value={displaySalesCount}
+          sub={rangeLabel}
+          icon={ShoppingCart}
+          gradient="bg-gradient-brand"
+          delay="50ms"
+        />
+        <StatCard
+          label="Prendas"
+          value={displayItemsSold}
+          sub={rangeLabel}
+          icon={Package}
+          gradient="bg-gradient-blue"
+          delay="100ms"
+        />
+        <StatCard
+          label="Total histórico"
+          value={displayTotalSales}
+          sub="Todas las ventas"
+          icon={BarChart2}
+          gradient="bg-gradient-amber"
+          delay="150ms"
+        />
       </div>
 
-      {/* Desglose Detallado por Tipo de Pago */}
+      {/* Payment breakdown for custom range */}
       {customDateRangeReport && (
-        <Card>
-          <div className="p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-              <CalendarRange className="h-5 w-5 mr-2 text-blue-600" />
-              Desglose Detallado
-            </h3>
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <h4 className="font-medium text-gray-900 mb-3">Resumen del Período</h4>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Período:</span>
-                      <span className="font-medium">
-                        {new Date(customDateRangeReport.start_date).toLocaleDateString('es-ES')} - {new Date(customDateRangeReport.end_date).toLocaleDateString('es-ES')}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Total de ingresos:</span>
-                      <span className="font-bold text-blue-600 text-lg">
-                        ${customDateRangeReport.total_revenue.toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Número de ventas:</span>
-                      <span className="font-medium">
-                        {customDateRangeReport.total_sales_count}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Prendas vendidas (unidades):</span>
-                      <span className="font-medium">
-                        {itemsSoldForRange != null ? itemsSoldForRange : '—'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Promedio por venta:</span>
-                      <span className="font-medium">
-                        ${customDateRangeReport.average_sale_amount.toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
+        <Card padding="none" className="animate-in">
+          <div className="flex items-center gap-2 px-5 py-4 border-b border-surface-100">
+            <CalendarRange className="h-4 w-4 text-brand-600" />
+            <h3 className="font-semibold text-surface-900 text-sm">Desglose del período</h3>
+            <Badge variant="primary" size="sm">{rangeLabel}</Badge>
+          </div>
+          <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2.5">
+              <h4 className="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-3">Resumen</h4>
+              {[
+                { label: 'Total ingresos',    value: `$${customDateRangeReport.total_revenue.toFixed(2)}`,        bold: true },
+                { label: 'Ventas',            value: customDateRangeReport.total_sales_count },
+                { label: 'Prendas vendidas',  value: itemsSoldForRange != null ? itemsSoldForRange : '—' },
+                { label: 'Promedio/venta',    value: `$${customDateRangeReport.average_sale_amount.toFixed(2)}` },
+              ].map(row => (
+                <div key={row.label} className="flex justify-between items-center py-1.5 border-b border-surface-50">
+                  <span className="text-sm text-surface-600">{row.label}</span>
+                  <span className={`text-sm ${row.bold ? 'font-bold text-brand-700 text-base' : 'font-medium text-surface-900'}`}>
+                    {row.value}
+                  </span>
                 </div>
-                
-                <div>
-                  <h4 className="font-medium text-gray-900 mb-3">Por Tipo de Pago</h4>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Efectivo:</span>
-                      <span className="font-medium text-green-600">
-                        ${customDateRangeReport.revenue_by_payment_type.efectivo.toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">QR:</span>
-                      <span className="font-medium text-blue-600">
-                        ${customDateRangeReport.revenue_by_payment_type.qr.toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Tarjeta:</span>
-                      <span className="font-medium text-pink-600">
-                        ${customDateRangeReport.revenue_by_payment_type.tarjeta.toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Mixto:</span>
-                      <span className="font-medium text-purple-600">
-                        ${customDateRangeReport.revenue_by_payment_type.mixto.toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
+              ))}
+            </div>
+            <div className="space-y-2.5">
+              <h4 className="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-3">Por tipo de pago</h4>
+              {[
+                { label: 'Efectivo', value: customDateRangeReport.revenue_by_payment_type.efectivo, color: 'text-emerald-600' },
+                { label: 'QR',       value: customDateRangeReport.revenue_by_payment_type.qr,       color: 'text-blue-600'   },
+                { label: 'Tarjeta',  value: customDateRangeReport.revenue_by_payment_type.tarjeta,  color: 'text-pink-600'   },
+                { label: 'Mixto',    value: customDateRangeReport.revenue_by_payment_type.mixto,    color: 'text-purple-600' },
+              ].map(row => (
+                <div key={row.label} className="flex justify-between items-center py-1.5 border-b border-surface-50">
+                  <span className="text-sm text-surface-600">{row.label}</span>
+                  <span className={`text-sm font-semibold ${row.color}`}>${row.value.toFixed(2)}</span>
                 </div>
-              </div>
-
-              {/* Gráfico de ventas diarias para el rango personalizado */}
-              {customDateRangeReport.daily_revenue && customDateRangeReport.daily_revenue.length > 0 && (
-                <div className="mt-6">
-                  <h4 className="font-medium text-gray-900 mb-3">Ventas Diarias</h4>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <LineChart data={customDateRangeReport.daily_revenue}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis 
-                        dataKey="date" 
-                        tickFormatter={(value) => new Date(value).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })}
-                      />
-                      <YAxis />
-                      <Tooltip 
-                        labelFormatter={(value) => new Date(value).toLocaleDateString('es-ES')}
-                        formatter={(value: number) => [`$${value.toFixed(2)}`, 'Total']}
-                      />
-                      <Line 
-                        type="monotone" 
-                        dataKey="total" 
-                        stroke="#3B82F6" 
-                        strokeWidth={2}
-                        dot={{ fill: '#3B82F6', strokeWidth: 2, r: 4 }}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
+              ))}
             </div>
           </div>
+
+          {customDateRangeReport.daily_revenue?.length > 0 && (
+            <div className="px-5 pb-5">
+              <h4 className="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-3">Ventas diarias</h4>
+              <ResponsiveContainer width="100%" height={200}>
+                <AreaChart data={customDateRangeReport.daily_revenue}>
+                  <defs>
+                    <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#4f46e5" stopOpacity={0.15} />
+                      <stop offset="100%" stopColor="#4f46e5" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={v => new Date(v).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })} />
+                  <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Area type="monotone" dataKey="total" stroke="#4f46e5" strokeWidth={2} fill="url(#g1)" dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </Card>
       )}
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Ventas de los Últimos 7 Días
-          </h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={dashboardStats?.dailySales || []}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis />
-              <Tooltip />
-              <Line 
-                type="monotone" 
-                dataKey="total" 
-                stroke="#3B82F6" 
-                strokeWidth={2}
-                dot={{ fill: '#3B82F6', strokeWidth: 2, r: 4 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card padding="none">
+          <div className="px-5 pt-4 pb-3 border-b border-surface-100">
+            <h3 className="font-semibold text-surface-900 text-sm">Ventas — últimos 7 días</h3>
+          </div>
+          <div className="p-5">
+            {(dashboardStats?.dailySales?.length ?? 0) > 0 ? (
+              <ResponsiveContainer width="100%" height={240}>
+                <AreaChart data={dashboardStats!.dailySales}>
+                  <defs>
+                    <linearGradient id="g2" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#10b981" stopOpacity={0.2} />
+                      <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                  <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Area type="monotone" dataKey="total" stroke="#10b981" strokeWidth={2.5} fill="url(#g2)" dot={{ fill: '#10b981', r: 4, strokeWidth: 0 }} />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-60 flex flex-col items-center justify-center text-surface-400">
+                <BarChart2 className="h-10 w-10 mb-3 opacity-30" />
+                <p className="text-sm">Sin datos para esta semana</p>
+              </div>
+            )}
+          </div>
         </Card>
 
-        <Card>
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Productos con Stock Bajo
-          </h3>
-          <div className="space-y-3">
-            {dashboardStats?.lowStockProducts?.length ? (
-              <>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-600">
-                    Mostrando {showAllLowStock ? dashboardStats.lowStockProducts.length : Math.min(5, dashboardStats.lowStockProducts.length)} de {dashboardStats.lowStockProducts.length}
-                  </span>
-                  {dashboardStats.lowStockProducts.length > 5 && (
-                    <button
-                      onClick={() => setShowAllLowStock(v => !v)}
-                      className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-                    >
-                      {showAllLowStock ? 'Ver menos' : 'Ver todos'}
-                    </button>
-                  )}
-                </div>
-                {(showAllLowStock ? dashboardStats.lowStockProducts : dashboardStats.lowStockProducts.slice(0, 5)).map((product, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
-                    <span className="font-medium text-gray-900">{product.name}</span>
-                    <span className="text-orange-600 font-semibold">
-                      {product.quantity} unidades
+        <Card padding="none">
+          <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-surface-100">
+            <h3 className="font-semibold text-surface-900 text-sm">Stock bajo</h3>
+            {lowStockList.length > 0 && (
+              <Badge variant="warning" dot size="sm">{lowStockList.length} productos</Badge>
+            )}
+          </div>
+          <div className="p-5">
+            {lowStockList.length > 0 ? (
+              <div className="space-y-2">
+                {visibleLowStock.map((p, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center justify-between px-3 py-2 rounded-lg bg-amber-50 border border-amber-100"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <AlertTriangle className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
+                      <span className="text-sm font-medium text-surface-800 truncate">{p.name}</span>
+                    </div>
+                    <span className={`text-xs font-bold flex-shrink-0 ml-2 ${p.quantity === 0 ? 'text-red-600' : 'text-amber-600'}`}>
+                      {p.quantity === 0 ? 'Sin stock' : `${p.quantity} un.`}
                     </span>
                   </div>
                 ))}
-              </>
+                {lowStockList.length > 5 && (
+                  <button
+                    onClick={() => setShowAllLowStock(v => !v)}
+                    className="w-full mt-1 py-1.5 text-xs font-medium text-brand-600 hover:text-brand-800 transition-colors"
+                  >
+                    {showAllLowStock ? 'Ver menos' : `Ver ${lowStockList.length - 5} más`}
+                  </button>
+                )}
+              </div>
             ) : (
-              <div className="text-center py-8 text-gray-500">
-                <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>No hay productos con stock bajo</p>
+              <div className="h-60 flex flex-col items-center justify-center text-surface-400">
+                <Package className="h-10 w-10 mb-3 opacity-30" />
+                <p className="text-sm">Stock en buen estado</p>
               </div>
             )}
           </div>

@@ -2,62 +2,63 @@ import React, { useEffect, useRef } from 'react';
 import { CheckCircle, XCircle, AlertTriangle, Info, X } from 'lucide-react';
 import { useToastStore, type Toast } from '../../store/toastStore';
 
-const ICONS = {
-  success: CheckCircle,
-  error: XCircle,
-  warning: AlertTriangle,
-  info: Info,
-};
-
-const STYLES = {
-  success: 'bg-green-50 border-green-400 text-green-800',
-  error: 'bg-red-50 border-red-400 text-red-800',
-  warning: 'bg-yellow-50 border-yellow-400 text-yellow-800',
-  info: 'bg-blue-50 border-blue-400 text-blue-800',
-};
-
-const ICON_STYLES = {
-  success: 'text-green-500',
-  error: 'text-red-500',
-  warning: 'text-yellow-500',
-  info: 'text-blue-500',
+const CONFIG = {
+  success: {
+    icon: CheckCircle,
+    base: 'bg-emerald-50 border-emerald-200 text-emerald-900',
+    icon_: 'text-emerald-500',
+    progress: 'bg-emerald-400',
+  },
+  error: {
+    icon: XCircle,
+    base: 'bg-red-50 border-red-200 text-red-900',
+    icon_: 'text-red-500',
+    progress: 'bg-red-400',
+  },
+  warning: {
+    icon: AlertTriangle,
+    base: 'bg-amber-50 border-amber-200 text-amber-900',
+    icon_: 'text-amber-500',
+    progress: 'bg-amber-400',
+  },
+  info: {
+    icon: Info,
+    base: 'bg-blue-50 border-blue-200 text-blue-900',
+    icon_: 'text-blue-500',
+    progress: 'bg-blue-400',
+  },
 };
 
 const ToastItem: React.FC<{ toast: Toast }> = ({ toast }) => {
   const removeToast = useToastStore((s) => s.removeToast);
-  const Icon = ICONS[toast.type];
+  const { icon: Icon, base, icon_, progress } = CONFIG[toast.type];
   const progressRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!progressRef.current || toast.duration <= 0) return;
     const el = progressRef.current;
     el.style.transition = `width ${toast.duration}ms linear`;
-    // Force reflow before starting transition
     void el.offsetWidth;
     el.style.width = '0%';
   }, [toast.duration]);
 
   return (
     <div
-      className={`flex items-start gap-3 w-full max-w-sm rounded-xl border px-4 py-3 shadow-lg pointer-events-auto relative overflow-hidden ${STYLES[toast.type]}`}
+      className={`flex items-start gap-3 w-full max-w-sm rounded-xl border px-4 py-3 shadow-lg pointer-events-auto relative overflow-hidden ${base} animate-slide-in-right`}
       role="alert"
     >
-      <Icon className={`h-5 w-5 mt-0.5 shrink-0 ${ICON_STYLES[toast.type]}`} />
+      <Icon className={`h-4.5 w-4.5 mt-0.5 shrink-0 ${icon_}`} style={{ width: '1.0625rem', height: '1.0625rem' }} />
       <p className="flex-1 text-sm font-medium leading-snug">{toast.message}</p>
       <button
         onClick={() => removeToast(toast.id)}
-        className="shrink-0 opacity-60 hover:opacity-100 transition-opacity"
+        className="shrink-0 p-0.5 rounded opacity-50 hover:opacity-100 hover:bg-black/8 transition-all"
         aria-label="Cerrar"
       >
-        <X className="h-4 w-4" />
+        <X className="h-3.5 w-3.5" />
       </button>
       {toast.duration > 0 && (
-        <div className="absolute bottom-0 left-0 h-0.5 w-full bg-current opacity-20">
-          <div
-            ref={progressRef}
-            className="h-full bg-current opacity-60"
-            style={{ width: '100%' }}
-          />
+        <div className="absolute bottom-0 left-0 h-[2px] w-full bg-black/6">
+          <div ref={progressRef} className={`h-full ${progress} opacity-70`} style={{ width: '100%' }} />
         </div>
       )}
     </div>
@@ -66,17 +67,13 @@ const ToastItem: React.FC<{ toast: Toast }> = ({ toast }) => {
 
 const ToastContainer: React.FC = () => {
   const toasts = useToastStore((s) => s.toasts);
-
   if (toasts.length === 0) return null;
-
   return (
     <div
       aria-live="polite"
-      className="fixed top-4 right-4 z-50 flex flex-col gap-2 items-end pointer-events-none"
+      className="fixed top-4 right-4 z-[100] flex flex-col gap-2 items-end pointer-events-none w-80"
     >
-      {toasts.map((toast) => (
-        <ToastItem key={toast.id} toast={toast} />
-      ))}
+      {toasts.map((t) => <ToastItem key={t.id} toast={t} />)}
     </div>
   );
 };

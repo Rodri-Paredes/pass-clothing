@@ -1,28 +1,52 @@
 import React from 'react';
 
+type CardVariant = 'default' | 'bordered' | 'flat' | 'elevated';
+
 interface CardProps {
   children: React.ReactNode;
   className?: string;
-  padding?: 'sm' | 'md' | 'lg';
+  padding?: 'none' | 'sm' | 'md' | 'lg';
+  variant?: CardVariant;
+  hover?: boolean;
+  onClick?: () => void;
 }
 
-const Card: React.FC<CardProps> = ({ 
-  children, 
-  className = '', 
-  padding = 'md' 
+const Card: React.FC<CardProps> = ({
+  children,
+  className = '',
+  padding = 'md',
+  variant = 'default',
+  hover = false,
+  onClick,
 }) => {
-  const paddingClasses = {
-    sm: 'p-3 sm:p-4',
-    md: 'p-4 sm:p-6', 
-    lg: 'p-6 sm:p-8'
+  const base = 'bg-white rounded-xl overflow-hidden';
+
+  const variants: Record<CardVariant, string> = {
+    default:  'border border-surface-200 shadow-card',
+    bordered: 'border-2 border-surface-200',
+    flat:     'border border-surface-100',
+    elevated: 'shadow-md border border-surface-100',
   };
 
+  const pads: Record<string, string> = {
+    none: '',
+    sm:   'p-4',
+    md:   'p-5',
+    lg:   'p-6',
+  };
+
+  const interactive = (hover || onClick)
+    ? 'cursor-pointer hover:shadow-card-hover hover:border-surface-300 transition-all duration-200 active:scale-[0.995]'
+    : '';
+
   return (
-    <div className={`
-      bg-white rounded-xl border border-gray-200 shadow-sm
-      hover:shadow-md transition-shadow duration-200
-      ${paddingClasses[padding]} ${className}
-    `}>
+    <div
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={onClick ? (e) => e.key === 'Enter' && onClick() : undefined}
+      className={`${base} ${variants[variant]} ${pads[padding]} ${interactive} ${className}`}
+    >
       {children}
     </div>
   );
