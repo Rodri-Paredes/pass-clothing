@@ -105,38 +105,22 @@ export class SalesService {
   }
 
   private async updateStockAfterSale(variantId: string, branchId: string, soldQuantity: number): Promise<void> {
-    // Usar una consulta más robusta para actualizar el stock
-    const { data: currentStock, error: stockError } = await supabase
-      .from('stock')
-      .select('quantity')
-      .eq('variant_id', variantId)
-      .eq('branch_id', branchId)
-      .single();
+    // ATOMIC decrement — prevents race conditions between concurrent sales.
+    // The RPC runs: UPDATE stock SET quantity = quantity - N WHERE quantity >= N
+    // returning true if successful, false if stock was insufficient.
+    const { data: result, error: rpcError } = await supabase.rpc('decrement_stock_atomic', {
+      p_variant_id: variantId,
+      p_branch_id: branchId,
+      p_quantity: soldQuantity
+    });
 
-    if (stockError) {
-      console.error('Error getting stock:', stockError);
-      throw new Error('Error al obtener el stock del producto');
-    }
-
-    if (!currentStock) {
-      throw new Error('No se encontró stock para este producto en esta sucursal');
-    }
-
-    const newQuantity = Math.max(0, currentStock.quantity - soldQuantity);
-
-    const { error: updateError } = await supabase
-      .from('stock')
-      .update({ 
-        quantity: newQuantity,
-        updated_at: new Date().toISOString()
-      })
-      .eq('variant_id', variantId)
-      .eq('branch_id', branchId)
-      .gte('quantity', soldQuantity); // Solo actualizar si hay suficiente stock
-
-    if (updateError) {
-      console.error('Error updating stock:', updateError);
+    if (rpcError) {
+      console.error('Error updating stock atomically:', rpcError);
       throw new Error('Error al actualizar el stock del producto');
+    }
+
+    if (!result) {
+      throw new Error('Stock insuficiente al momento de confirmar la venta');
     }
   }
 
