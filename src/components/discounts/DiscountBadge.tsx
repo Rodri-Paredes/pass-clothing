@@ -1,4 +1,5 @@
 import React from 'react';
+import { fmtMoneyRaw } from '../../lib/formatters';
 
 interface DiscountBadgeProps {
   percentage: number;
@@ -58,10 +59,10 @@ export const DiscountPrice: React.FC<DiscountPriceProps> = ({
   return (
     <div className="flex items-center gap-2 flex-wrap">
       <span className={`line-through text-gray-400 ${classes.original}`}>
-        ${originalPrice.toFixed(2)}
+        Bs. {fmtMoneyRaw(originalPrice)}
       </span>
       <span className={`text-red-600 ${classes.discounted}`}>
-        ${discountedPrice.toFixed(2)}
+        Bs. {fmtMoneyRaw(discountedPrice)}
       </span>
       {showBadge && <DiscountBadge percentage={percentage} size={size === 'lg' ? 'md' : 'sm'} />}
     </div>

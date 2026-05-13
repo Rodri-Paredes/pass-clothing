@@ -8,6 +8,7 @@ import { useSalesStore } from '../store/salesStore';
 import { cashClosureService } from '../services/cashClosureService';
 import type { DailyReport } from '../lib/types';
 import { useToastStore } from '../store/toastStore';
+import { fmtMoney } from '../lib/formatters';
 
 // Nuevo: funciones para totales por tipo de pago
 import { supabase } from '../lib/supabase';

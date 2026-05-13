@@ -24,6 +24,7 @@ import Input from '../components/ui/Input';
 import Modal from '../components/ui/Modal';
 import { useAuthStore } from '../store/authStore';
 import { cashRegisterService } from '../services/cashRegisterService';
+import { fmtMoney } from '../lib/formatters';
 import type { 
   OpenCashRegister, 
   CashMovementWithUser, 
@@ -184,12 +185,7 @@ const CashFlowPage: React.FC = () => {
     }
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-ES', {
-      style: 'currency',
-      currency: 'BOB'
-    }).format(amount);
-  };
+  const formatCurrency = (amount: number) => fmtMoney(amount);
 
   const formatDateTime = (dateString: string) => {
     return new Date(dateString).toLocaleString('es-ES', {

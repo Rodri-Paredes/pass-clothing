@@ -13,6 +13,7 @@ import { useDiscountStore } from '../store/discountStore';
 import { useToastStore } from '../store/toastStore';
 import { CATEGORIES, SALE_CHANNELS } from '../lib/constants';
 import { usePaginatedProducts } from '../hooks/usePaginatedProducts';
+import { fmtMoney, fmtMoneyRaw, fmtQty } from '../lib/formatters';
 
 interface CartItem {
   product: any;
@@ -207,7 +208,7 @@ const SalesPage: React.FC = () => {
         (mixedPaymentDetails.tarjeta || 0);
       if (Math.abs(mixedSum - expectedTotal) > 0.01) {
         addToast(
-          `El total de pago mixto (Bs ${mixedSum.toFixed(2)}) no coincide con el total de la venta (Bs ${expectedTotal.toFixed(2)})`,
+      `El total de pago mixto (${fmtMoney(mixedSum)}) no coincide con el total de la venta (${fmtMoney(expectedTotal)})`,
           'error'
         );
         return;
@@ -242,7 +243,7 @@ const SalesPage: React.FC = () => {
       setShowSuccessModal(true);
     } catch (error: any) {
       console.error('Error processing sale:', error);
-      const msg = error?.message || 'Error desconocido al procesar la venta';
+        const msg = error?.message || 'Error desconocido al procesar la venta';
       const isStockError = msg.toLowerCase().includes('stock');
       notify(
         isStockError ? 'stock_insufficient' : 'sale_failed',
@@ -368,15 +369,15 @@ const SalesPage: React.FC = () => {
                                 {hasDiscount ? (
                                   <>
                                     <span className="text-xs text-gray-400 line-through">
-                                      ${product.price.toFixed(2)}
+                                      Bs. {fmtMoneyRaw(product.price)}
                                     </span>
                                     <span className="font-bold text-green-600">
-                                      ${finalPrice.toFixed(2)}
+                                      Bs. {fmtMoneyRaw(finalPrice)}
                                     </span>
                                   </>
                                 ) : (
                                   <span className="font-bold text-blue-600">
-                                    ${product.price.toFixed(2)}
+                                      Bs. {fmtMoneyRaw(product.price)}
                                   </span>
                                 )}
                               </div>
@@ -462,11 +463,11 @@ const SalesPage: React.FC = () => {
                               <div className="flex flex-col">
                                 {hasDiscount ? (
                                   <>
-                                    <span className="text-xs text-gray-400 line-through">${item.product.originalPrice.toFixed(2)} c/u</span>
-                                    <span className="text-xs text-green-600 font-medium">${priceToShow.toFixed(2)} c/u (con descuento)</span>
+                                    <span className="text-xs text-gray-400 line-through">Bs. {fmtMoneyRaw(item.product.originalPrice)} c/u</span>
+                                    <span className="text-xs text-green-600 font-medium">Bs. {fmtMoneyRaw(priceToShow)} c/u (con descuento)</span>
                                   </>
                                 ) : (
-                                  <span className="text-xs text-gray-500">${priceToShow.toFixed(2)} c/u</span>
+                                  <span className="text-xs text-gray-500">Bs. {fmtMoneyRaw(priceToShow)} c/u</span>
                                 )}
                               </div>
                               <p className="text-xs text-gray-400">Stock: {item.availableStock}</p>
@@ -498,7 +499,7 @@ const SalesPage: React.FC = () => {
                             <div className="flex items-center gap-2">
                               <span className="text-xs text-gray-500">Subtotal:</span>
                               <span className={`font-semibold text-base ${hasDiscount ? 'text-green-600' : 'text-blue-700'}`}>
-                                ${(item.quantity * priceToShow).toFixed(2)}
+                                Bs. {fmtMoneyRaw(item.quantity * priceToShow)}
                               </span>
                             </div>
                             <Button
@@ -675,12 +676,12 @@ const SalesPage: React.FC = () => {
                             <div className="flex justify-between text-sm">
                               <span className="font-medium text-purple-700">Total ingresado:</span>
                               <span className="font-bold text-purple-800">
-                                Bs. {(mixedPaymentDetails.efectivo + mixedPaymentDetails.qr + mixedPaymentDetails.tarjeta).toFixed(2)}
+                                Bs. {fmtMoneyRaw(mixedPaymentDetails.efectivo + mixedPaymentDetails.qr + mixedPaymentDetails.tarjeta)}
                               </span>
                             </div>
                             <div className="flex justify-between text-sm">
                               <span className="font-medium text-purple-700">Total a pagar:</span>
-                              <span className="font-bold text-purple-800">Bs. {getTotalAmount().toFixed(2)}</span>
+                              <span className="font-bold text-purple-800">Bs. {fmtMoneyRaw(getTotalAmount())}</span>
                             </div>
                             {(mixedPaymentDetails.efectivo + mixedPaymentDetails.qr + mixedPaymentDetails.tarjeta) !== getTotalAmount() && (
                               <div className="text-xs text-red-600 mt-1">
@@ -721,7 +722,7 @@ const SalesPage: React.FC = () => {
                       <div className="space-y-2">
                         <div className="flex justify-between text-sm text-gray-600">
                           <span>Subtotal:</span>
-                          <span>Bs. {getSubtotal().toFixed(2)}</span>
+                          <span>Bs. {fmtMoneyRaw(getSubtotal())}</span>
                         </div>
                         {getTotalDiscountFromProducts() > 0 && (
                           <div className="flex justify-between text-sm text-green-600 font-medium">
@@ -729,18 +730,18 @@ const SalesPage: React.FC = () => {
                               <Percent className="h-3 w-3" />
                               Descuentos aplicados:
                             </span>
-                            <span>- Bs. {getTotalDiscountFromProducts().toFixed(2)}</span>
+                            <span>- Bs. {fmtMoneyRaw(getTotalDiscountFromProducts())}</span>
                           </div>
                         )}
                         {discountAmount > 0 && (
                           <div className="flex justify-between text-sm text-orange-600">
                             <span>Descuento adicional:</span>
-                            <span>- Bs. {discountAmount.toFixed(2)}</span>
+                            <span>- Bs. {fmtMoneyRaw(discountAmount)}</span>
                           </div>
                         )}
                         <div className="flex items-center justify-between bg-gradient-to-r from-blue-100 to-indigo-100 rounded-lg px-4 py-3">
                           <span className="text-lg font-bold text-gray-900">Total a pagar:</span>
-                          <span className="text-3xl font-extrabold text-blue-700 drop-shadow">Bs. {getTotalAmount().toFixed(2)}</span>
+                          <span className="text-3xl font-extrabold text-blue-700 drop-shadow">Bs. {fmtMoneyRaw(getTotalAmount())}</span>
                         </div>
                       </div>
                       <Button
@@ -831,7 +832,7 @@ const SalesPage: React.FC = () => {
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1 md:gap-2 text-right">
-                    <span className="text-xl md:text-2xl font-extrabold text-blue-600">${sale.total.toFixed(2)}</span>
+                    <span className="text-xl md:text-2xl font-extrabold text-blue-600">{fmtMoney(sale.total)}</span>
                     {sale.sale_items && (
                       <span className="text-xs md:text-sm text-gray-600 font-medium">
                         {sale.sale_items.length} artículo{sale.sale_items.length !== 1 ? 's' : ''}
@@ -906,7 +907,7 @@ const SalesPage: React.FC = () => {
               )}
               <div className="flex flex-col gap-2">
                 <span className="text-xs md:text-sm text-gray-500">Total</span>
-                <span className="font-extrabold text-blue-700 text-xl md:text-2xl">${selectedSale.total.toFixed(2)}</span>
+                <span className="font-extrabold text-blue-700 text-xl md:text-2xl">{fmtMoney(selectedSale.total)}</span>
               </div>
             </div>
             <div>
@@ -919,7 +920,7 @@ const SalesPage: React.FC = () => {
                       {item.variant?.size ? ` (Talla: ${item.variant.size})` : ''}
                     </span>
                     <span className="text-gray-600">x{item.quantity}</span>
-                    <span className="font-bold text-blue-700">${item.unit_price.toFixed(2)}</span>
+                    <span className="font-bold text-blue-700">Bs. {fmtMoneyRaw(item.unit_price)}</span>
                   </li>
                 ))}
               </ul>

@@ -3,6 +3,7 @@ import { Star, Package, Calendar, ArrowRight } from 'lucide-react';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
 import { dropsService } from '../../services/dropsService';
+import { fmtMoney } from '../../lib/formatters';
 import type { Drop, DropProduct } from '../../lib/types';
 
 interface FeaturedDropsSectionProps {
@@ -164,7 +165,7 @@ export const FeaturedDropsSection: React.FC<FeaturedDropsSectionProps> = ({ clas
                   <div className="space-y-1">
                     <h5 className="font-medium text-gray-900 text-sm truncate">{product.name}</h5>
                     <p className="text-xs text-gray-600 truncate">{product.category}</p>
-                    <p className="text-sm font-semibold text-blue-600">${product.price.toFixed(2)}</p>
+                    <p className="text-sm font-semibold text-blue-600">{fmtMoney(product.price)}</p>
                   </div>
                 </Card>
               );

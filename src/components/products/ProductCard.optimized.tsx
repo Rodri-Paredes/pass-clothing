@@ -6,6 +6,7 @@
 import { memo } from 'react';
 import CachedImage from '../../components/ui/CachedImage';
 import type { Product } from '../../lib/types';
+import { fmtMoneyRaw } from '../../lib/formatters';
 
 // ============================================
 // PRODUCT CARD - Optimizado con React.memo
@@ -65,7 +66,7 @@ export const ProductCard = memo(function ProductCard({
         
         <div className="flex items-center justify-between mt-4">
           <span className="text-xl font-bold text-blue-600">
-            Bs. {product.price.toFixed(2)}
+            Bs. {fmtMoneyRaw(product.price)}
           </span>
           
           {product.category && (

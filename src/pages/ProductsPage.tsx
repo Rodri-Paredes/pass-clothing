@@ -11,6 +11,7 @@ import { useProductStore } from '../store/productStore';
 import { useDiscountStore } from '../store/discountStore';
 import { useAuthStore } from '../store/authStore';
 import { CATEGORIES } from '../lib/constants';
+import { fmtMoney } from '../lib/formatters';
 import { usePaginatedProducts } from '../hooks/usePaginatedProducts';
 import { dropsService } from '../services/dropsService';
 import { productService } from '../services/productService';
@@ -264,7 +265,7 @@ const ProductsPage: React.FC = () => {
                     }
                     return (
                       <span className="text-lg font-bold text-blue-600">
-                        ${product.price.toFixed(2)}
+                        Bs. {fmtMoney(product.price)}
                       </span>
                     );
                   })()}
@@ -368,7 +369,7 @@ const ProductsPage: React.FC = () => {
                 <div>
                   <h4 className="font-semibold text-gray-900">{productToToggle.name}</h4>
                   <p className="text-sm text-gray-600">{productToToggle.category}</p>
-                  <p className="text-sm text-gray-500">Precio: ${productToToggle.price.toFixed(2)}</p>
+                  <p className="text-sm text-gray-500">Precio: {fmtMoney(productToToggle.price)}</p>
                 </div>
               </div>
             </div>

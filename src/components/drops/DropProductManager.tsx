@@ -4,6 +4,7 @@ import Button from '../ui/Button';
 import Card from '../ui/Card';
 import Input from '../ui/Input';
 import { dropsService } from '../../services/dropsService';
+import { fmtMoney } from '../../lib/formatters';
 import { useProductStore } from '../../store/productStore';
 import type { DropProduct } from '../../lib/types';
 
@@ -242,7 +243,7 @@ export const DropProductManager: React.FC<DropProductManagerProps> = ({
                         {product.name}
                       </p>
                       <p className="text-xs text-gray-500">
-                        {product.category} • ${product.price.toFixed(2)}
+                        {product.category} • Bs. {fmtMoney(product.price)}
                       </p>
                     </div>
 
@@ -328,7 +329,7 @@ export const DropProductManager: React.FC<DropProductManagerProps> = ({
                             )}
                           </div>
                           <p className="text-xs text-gray-600">
-                            {product.category} • ${product.price.toFixed(2)}
+                            {product.category} • Bs. {fmtMoney(product.price)}
                           </p>
                           <div className="flex items-center gap-2 mt-1">
                             <label className="text-xs text-gray-600">Orden:</label>

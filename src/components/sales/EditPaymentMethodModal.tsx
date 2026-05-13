@@ -4,6 +4,7 @@ import Button from '../ui/Button';
 import Input from '../ui/Input';
 import Modal from '../ui/Modal';
 import type { Sale } from '../../lib/types';
+import { fmtMoney, fmtMoneyRaw } from '../../lib/formatters';
 
 interface EditPaymentMethodModalProps {
   isOpen: boolean;
@@ -42,7 +43,7 @@ const EditPaymentMethodModal: React.FC<EditPaymentMethodModalProps> = ({
       if (selectedPaymentType === 'MIXTO') {
         const total = mixedPaymentDetails.efectivo + mixedPaymentDetails.qr + mixedPaymentDetails.tarjeta;
         if (Math.abs(total - sale.total) > 0.01) {
-          setError(`La suma de los pagos (${total.toFixed(2)}) debe ser igual al total (${sale.total.toFixed(2)})`);
+          setError(`La suma de los pagos (${fmtMoney(total)}) debe ser igual al total (${fmtMoney(sale.total)})`);
           setIsSaving(false);
           return;
         }
@@ -83,7 +84,7 @@ const EditPaymentMethodModal: React.FC<EditPaymentMethodModalProps> = ({
         <div className="bg-gray-50 p-4 rounded-lg">
           <div className="flex justify-between items-center mb-2">
             <span className="text-sm text-gray-600">Venta #{sale.id.slice(-8)}</span>
-            <span className="text-xl font-bold text-blue-600">${sale.total.toFixed(2)}</span>
+            <span className="text-xl font-bold text-blue-600">{fmtMoney(sale.total)}</span>
           </div>
           <div className="text-sm text-gray-600">
             Método actual: <span className="font-semibold">{sale.payment_type}</span>
@@ -193,12 +194,12 @@ const EditPaymentMethodModal: React.FC<EditPaymentMethodModalProps> = ({
                   ? 'text-green-600' 
                   : 'text-red-600'
               }`}>
-                ${getTotalMixedPayment().toFixed(2)}
+                {fmtMoney(getTotalMixedPayment())}
               </span>
             </div>
             {Math.abs(getTotalMixedPayment() - sale.total) >= 0.01 && (
               <p className="text-xs text-red-600">
-                El total debe ser ${sale.total.toFixed(2)}
+                El total debe ser {fmtMoney(sale.total)}
               </p>
             )}
           </div>

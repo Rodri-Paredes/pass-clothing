@@ -19,7 +19,7 @@ const Card: React.FC<CardProps> = ({
   hover = false,
   onClick,
 }) => {
-  const base = 'bg-white rounded-xl overflow-hidden';
+  const base = 'bg-white rounded-xl';
 
   const variants: Record<CardVariant, string> = {
     default:  'border border-surface-200 shadow-card',

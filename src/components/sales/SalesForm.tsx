@@ -6,6 +6,7 @@ import Card from '../ui/Card';
 import { useProductStore } from '../../store/productStore';
 import { useSalesStore } from '../../store/salesStore';
 import { useAuthStore } from '../../store/authStore';
+import { fmtMoney, fmtMoneyRaw } from '../../lib/formatters';
 
 interface SaleItem {
   productId: string;
@@ -173,7 +174,7 @@ const SalesForm: React.FC<SalesFormProps> = ({ onClose }) => {
                 <div className="flex justify-between items-center">
                   <div>
                     <p className="font-medium text-gray-900">{variant.productName} <span className="text-xs text-gray-500">({variant.size})</span></p>
-                    <p className="text-sm text-gray-600">${variant.price.toFixed(2)}</p>
+                    <p className="text-sm text-gray-600">Bs. {fmtMoneyRaw(variant.price)}</p>
                   </div>
                   <span className="text-sm text-gray-500">
                     Stock: {variant.stock}
@@ -232,7 +233,7 @@ const SalesForm: React.FC<SalesFormProps> = ({ onClose }) => {
                     </div>
                     {/* Subtotal */}
                     <div className="w-20 text-right font-medium">
-                      ${(item.quantity * item.unitPrice).toFixed(2)}
+                      Bs. {fmtMoneyRaw(item.quantity * item.unitPrice)}
                     </div>
                     {/* Remove Button */}
                     <Button
@@ -261,7 +262,7 @@ const SalesForm: React.FC<SalesFormProps> = ({ onClose }) => {
           <div className="flex justify-between items-center">
             <span className="text-lg font-semibold text-gray-900">Total:</span>
             <span className="text-2xl font-bold text-blue-600">
-              ${getTotalAmount().toFixed(2)}
+              {fmtMoney(getTotalAmount())}
             </span>
           </div>
         </Card>

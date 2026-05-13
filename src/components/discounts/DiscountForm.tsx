@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Search, Package, Star } from 'lucide-react';
 import Button from '../ui/Button';
+import { fmtMoneyRaw } from '../../lib/formatters';
 import Input from '../ui/Input';
 import { useProductStore } from '../../store/productStore';
 import { dropsService } from '../../services/dropsService';
@@ -221,7 +222,7 @@ const DiscountForm: React.FC<DiscountFormProps> = ({ discount, onClose, onSave }
   // Preview del descuento en un producto seleccionado
   const getPreviewPrice = (price: number): string => {
     const discounted = price - (price * percentage / 100);
-    return discounted.toFixed(2);
+    return fmtMoneyRaw(discounted);
   };
 
   return (
@@ -318,8 +319,8 @@ const DiscountForm: React.FC<DiscountFormProps> = ({ discount, onClose, onSave }
                 <div key={p.id} className="flex items-center justify-between text-sm">
                   <span className="text-green-700 truncate mr-2">{p.name}</span>
                   <div className="flex items-center space-x-2 flex-shrink-0">
-                    <span className="line-through text-gray-400">${p.price.toFixed(2)}</span>
-                    <span className="font-bold text-green-700">${getPreviewPrice(p.price)}</span>
+                    <span className="line-through text-gray-400">Bs. {fmtMoneyRaw(p.price)}</span>
+                    <span className="font-bold text-green-700">Bs. {getPreviewPrice(p.price)}</span>
                   </div>
                 </div>
               ))}
@@ -450,11 +451,11 @@ const DiscountForm: React.FC<DiscountFormProps> = ({ discount, onClose, onSave }
                       </div>
                       <div className="ml-2 text-right flex-shrink-0">
                         <p className="text-sm font-semibold text-gray-900">
-                          ${product.price.toFixed(2)}
+                          Bs. {fmtMoneyRaw(product.price)}
                         </p>
                         {isSelected && percentage > 0 && (
                           <p className="text-xs font-bold text-green-600">
-                            → ${getPreviewPrice(product.price)}
+                            → Bs. {getPreviewPrice(product.price)}
                           </p>
                         )}
                       </div>

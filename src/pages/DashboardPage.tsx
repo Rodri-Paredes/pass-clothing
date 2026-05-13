@@ -14,6 +14,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
+import { fmtMoney, fmtMoneyRaw, fmtQty } from '../lib/formatters';
 import { SkeletonStatGrid } from '../components/ui/Skeleton';
 import { salesService } from '../services/salesService';
 import { useAuthStore } from '../store/authStore';
@@ -54,7 +55,7 @@ const ChartTooltip = ({ active, payload, label }: any) => {
   return (
     <div className="bg-white border border-surface-200 rounded-xl px-3 py-2 shadow-lg text-sm">
       <p className="text-surface-500 text-xs mb-1">{label}</p>
-      <p className="font-semibold text-surface-900">${Number(payload[0].value).toFixed(2)}</p>
+      <p className="font-semibold text-surface-900">{fmtMoney(Number(payload[0].value))}</p>
     </div>
   );
 };
@@ -252,7 +253,7 @@ const DashboardPage: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Ingresos"
-          value={`$${displayRevenue.toFixed(2)}`}
+          value={fmtMoney(displayRevenue)}
           sub={rangeLabel}
           icon={TrendingUp}
           gradient="bg-gradient-green"
@@ -296,10 +297,10 @@ const DashboardPage: React.FC = () => {
             <div className="space-y-2.5">
               <h4 className="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-3">Resumen</h4>
               {[
-                { label: 'Total ingresos',    value: `$${customDateRangeReport.total_revenue.toFixed(2)}`,        bold: true },
-                { label: 'Ventas',            value: customDateRangeReport.total_sales_count },
-                { label: 'Prendas vendidas',  value: itemsSoldForRange != null ? itemsSoldForRange : '—' },
-                { label: 'Promedio/venta',    value: `$${customDateRangeReport.average_sale_amount.toFixed(2)}` },
+                { label: 'Total ingresos',    value: fmtMoney(customDateRangeReport.total_revenue),                       bold: true },
+                { label: 'Ventas',            value: fmtQty(customDateRangeReport.total_sales_count) },
+                { label: 'Prendas vendidas',  value: itemsSoldForRange != null ? fmtQty(itemsSoldForRange) : '—' },
+                { label: 'Promedio/venta',    value: fmtMoney(customDateRangeReport.average_sale_amount) },
               ].map(row => (
                 <div key={row.label} className="flex justify-between items-center py-1.5 border-b border-surface-50">
                   <span className="text-sm text-surface-600">{row.label}</span>
@@ -312,14 +313,14 @@ const DashboardPage: React.FC = () => {
             <div className="space-y-2.5">
               <h4 className="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-3">Por tipo de pago</h4>
               {[
-                { label: 'Efectivo', value: customDateRangeReport.revenue_by_payment_type.efectivo, color: 'text-emerald-600' },
-                { label: 'QR',       value: customDateRangeReport.revenue_by_payment_type.qr,       color: 'text-blue-600'   },
-                { label: 'Tarjeta',  value: customDateRangeReport.revenue_by_payment_type.tarjeta,  color: 'text-pink-600'   },
-                { label: 'Mixto',    value: customDateRangeReport.revenue_by_payment_type.mixto,    color: 'text-purple-600' },
+                { label: 'Efectivo', value: fmtMoneyRaw(customDateRangeReport.revenue_by_payment_type.efectivo), color: 'text-emerald-600' },
+                { label: 'QR',       value: fmtMoneyRaw(customDateRangeReport.revenue_by_payment_type.qr),       color: 'text-blue-600'   },
+                { label: 'Tarjeta',  value: fmtMoneyRaw(customDateRangeReport.revenue_by_payment_type.tarjeta),  color: 'text-pink-600'   },
+                { label: 'Mixto',    value: fmtMoneyRaw(customDateRangeReport.revenue_by_payment_type.mixto),    color: 'text-purple-600' },
               ].map(row => (
                 <div key={row.label} className="flex justify-between items-center py-1.5 border-b border-surface-50">
                   <span className="text-sm text-surface-600">{row.label}</span>
-                  <span className={`text-sm font-semibold ${row.color}`}>${row.value.toFixed(2)}</span>
+                  <span className={`text-sm font-semibold ${row.color}`}>{row.value}</span>
                 </div>
               ))}
             </div>
