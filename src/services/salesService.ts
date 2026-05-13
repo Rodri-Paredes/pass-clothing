@@ -157,8 +157,8 @@ export class SalesService {
         sale_channel,
         notes,
         created_at,
-        user:users(id, name),
-        branch:branches(id, name),
+        user:users!left(id, name),
+        branch:branches!left(id, name),
         sale_items(
           id,
           sale_id,

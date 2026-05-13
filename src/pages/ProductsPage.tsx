@@ -13,6 +13,7 @@ import { useAuthStore } from '../store/authStore';
 import { CATEGORIES } from '../lib/constants';
 import { usePaginatedProducts } from '../hooks/usePaginatedProducts';
 import { dropsService } from '../services/dropsService';
+import { productService } from '../services/productService';
 import type { Drop } from '../lib/types';
 
 const ProductsPage: React.FC = () => {
@@ -23,6 +24,7 @@ const ProductsPage: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [showProductForm, setShowProductForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+  const [loadingEdit, setLoadingEdit] = useState(false);
   const [showHiddenProducts, setShowHiddenProducts] = useState(false);
   const [showVisibilityModal, setShowVisibilityModal] = useState(false);
   const [productToToggle, setProductToToggle] = useState<any>(null);
@@ -93,9 +95,18 @@ const ProductsPage: React.FC = () => {
     return drops.find(drop => drop.id === product.drop_id) || null;
   };
 
-  const handleEdit = (product: any) => {
-    setEditingProduct(product);
-    setShowProductForm(true);
+  const handleEdit = async (product: any) => {
+    setLoadingEdit(true);
+    try {
+      // Fetch full product with description before opening form
+      const fullProduct = await productService.getProduct(product.id);
+      setEditingProduct(fullProduct || product);
+    } catch (e) {
+      setEditingProduct(product);
+    } finally {
+      setLoadingEdit(false);
+      setShowProductForm(true);
+    }
   };
 
   const handleCloseForm = () => {
@@ -282,6 +293,7 @@ const ProductsPage: React.FC = () => {
                           size="sm"
                           variant="ghost"
                           onClick={() => handleEdit(product)}
+                          isLoading={loadingEdit}
                         >
                           <Edit className="h-4 w-4" />
                         </Button>

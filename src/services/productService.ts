@@ -129,9 +129,15 @@ export class ProductService {
   }
 
   async updateProduct(id: string, updates: Partial<Product>): Promise<Product> {
+    // Strip out undefined values and empty strings that could overwrite real data
+    const safeUpdates = Object.fromEntries(
+      Object.entries(updates).filter(([, v]) => v !== undefined && v !== null)
+    );
+    // Preserve empty string for description only if explicitly set to empty
+    // (description comes fully loaded from getProduct before edit)
     const { data, error } = await supabase
       .from('products')
-      .update(updates)
+      .update(safeUpdates)
       .eq('id', id)
       .select()
       .single();

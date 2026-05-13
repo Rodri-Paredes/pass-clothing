@@ -12,6 +12,14 @@ const ROLES = [
   { value: 'vendedor', label: 'Vendedor' },
 ];
 
+function validatePassword(password: string): string | null {
+  if (password.length < 10) return 'La contraseña debe tener al menos 10 caracteres.';
+  if (!/[A-Z]/.test(password)) return 'La contraseña debe incluir al menos una mayúscula.';
+  if (!/[0-9]/.test(password)) return 'La contraseña debe incluir al menos un número.';
+  if (!/[^A-Za-z0-9]/.test(password)) return 'La contraseña debe incluir al menos un símbolo (!@#$%...).';
+  return null;
+}
+
 const UsersPage: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -58,6 +66,14 @@ const UsersPage: React.FC = () => {
     if (!form.email || (!editingUser && !form.password)) {
       setError('El correo y la contraseña son obligatorios para nuevos usuarios.');
       return;
+    }
+    if (!editingUser && form.password) {
+      const pwError = validatePassword(form.password);
+      if (pwError) {
+        setError(pwError);
+        setLoading(false);
+        return;
+      }
     }
     setLoading(true);
     // supabase siempre está definido por import
@@ -189,6 +205,12 @@ const UsersPage: React.FC = () => {
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, password: e.target.value }))}
                 required
               />
+              <ul className="mt-1 text-xs text-gray-500 space-y-0.5">
+                <li className={form.password.length >= 10 ? 'text-green-600' : ''}>✓ Mínimo 10 caracteres</li>
+                <li className={/[A-Z]/.test(form.password) ? 'text-green-600' : ''}>✓ Al menos una mayúscula</li>
+                <li className={/[0-9]/.test(form.password) ? 'text-green-600' : ''}>✓ Al menos un número</li>
+                <li className={/[^A-Za-z0-9]/.test(form.password) ? 'text-green-600' : ''}>✓ Al menos un símbolo (!@#$%...)</li>
+              </ul>
             </div>
           )}
           {error && <div className="text-red-500 text-sm">{error}</div>}

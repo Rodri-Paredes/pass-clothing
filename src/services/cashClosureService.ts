@@ -69,7 +69,7 @@ export class CashClosureService {
         .from('sales')
         .select(`
           *,
-          user:users(name),
+          user:users!left(name),
           sale_items (
             *,
             variant:product_variants (
@@ -171,7 +171,7 @@ export class CashClosureService {
         .from('sales')
         .select(`
           *,
-          user:users(name),
+          user:users!left(name),
           sale_items(
             *,
             variant:product_variants(
@@ -238,7 +238,7 @@ export class CashClosureService {
       .from('sales')
       .select(`
         *,
-        user:users(name),
+        user:users!left(name),
         sale_items(
           *,
           variant:product_variants(
@@ -268,7 +268,7 @@ export class CashClosureService {
       .from('sales')
       .select(`
         *,
-        user:users(name),
+        user:users!left(name),
         sale_items(
           *,
           variant:product_variants(
