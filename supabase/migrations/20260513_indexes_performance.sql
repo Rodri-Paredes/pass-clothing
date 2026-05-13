@@ -63,11 +63,11 @@ CREATE INDEX IF NOT EXISTS idx_sale_items_variant_id
 -- cash_registers
 -- ────────────────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_cash_registers_branch_status
-  ON cash_registers(branch_id, closed_at)
-  WHERE closed_at IS NULL;
+  ON cash_registers(branch_id, status)
+  WHERE status = 'ABIERTA';
 
-CREATE INDEX IF NOT EXISTS idx_cash_registers_branch_opened_at
-  ON cash_registers(branch_id, opened_at DESC);
+CREATE INDEX IF NOT EXISTS idx_cash_registers_branch_opening_date
+  ON cash_registers(branch_id, opening_date DESC);
 
 -- ────────────────────────────────────────────────────────────
 -- cash_movements
