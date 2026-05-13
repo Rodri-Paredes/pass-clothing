@@ -46,8 +46,8 @@ function App() {
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/products" element={<ProductsPage />} />
-          <Route path="/drops" element={<DropsPage />} />
-          <Route path="/discounts" element={<DiscountsPage />} />
+          <Route path="/drops" element={user?.role === 'admin' ? <DropsPage /> : <Navigate to="/dashboard" replace />} />
+          <Route path="/discounts" element={user?.role === 'admin' ? <DiscountsPage /> : <Navigate to="/dashboard" replace />} />
           <Route path="/sales" element={<SalesPage />} />
           {/* <Route path="/reports" element={<DashboardPage />} /> */}
           <Route path="/cash-closure" element={<CashClosurePage />} />

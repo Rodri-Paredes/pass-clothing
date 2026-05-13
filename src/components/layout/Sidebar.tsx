@@ -21,12 +21,12 @@ interface SidebarProps {
 }
 
 const NAV_MAIN = [
-  { name: 'Dashboard',    href: '/dashboard',    icon: LayoutDashboard },
-  { name: 'Ventas',       href: '/sales',         icon: ShoppingCart },
-  { name: 'Productos',    href: '/products',      icon: Package },
-  { name: 'Drops',        href: '/drops',         icon: Star },
-  { name: 'Descuentos',   href: '/discounts',     icon: Percent },
-  { name: 'Cierre de Caja', href: '/cash-closure', icon: BarChart3 },
+  { name: 'Dashboard',      href: '/dashboard',    icon: LayoutDashboard, adminOnly: false },
+  { name: 'Ventas',         href: '/sales',        icon: ShoppingCart,    adminOnly: false },
+  { name: 'Productos',      href: '/products',     icon: Package,         adminOnly: false },
+  { name: 'Drops',          href: '/drops',        icon: Star,            adminOnly: true  },
+  { name: 'Descuentos',     href: '/discounts',    icon: Percent,         adminOnly: true  },
+  { name: 'Cierre de Caja', href: '/cash-closure', icon: BarChart3,       adminOnly: false },
 ];
 
 const NAV_ADMIN = [
@@ -103,7 +103,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
       {/* Main nav */}
       <nav className="flex-1 px-2 space-y-0.5">
         <p className="px-3 mb-1.5 text-2xs font-semibold uppercase tracking-widest text-slate-600">Principal</p>
-        {NAV_MAIN.map((item) => (
+        {NAV_MAIN.filter((item) => !item.adminOnly || user?.role === 'admin').map((item) => (
           <NavItem key={item.href} item={item} />
         ))}
 
