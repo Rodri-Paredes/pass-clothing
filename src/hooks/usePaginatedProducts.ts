@@ -63,15 +63,6 @@ export function usePaginatedProducts(params: UsePaginatedProductsParams = {}): U
       const searchTerm = currentSearch !== undefined ? currentSearch : debouncedSearch;
       const categoryFilter = currentCategory !== undefined ? currentCategory : debouncedCategory;
 
-      console.log('🔍 [usePaginatedProducts] Cargando página:', { 
-        targetPage, 
-        replace, 
-        searchTerm, 
-        categoryFilter, 
-        debouncedSearch, 
-        debouncedCategory 
-      });
-
       const { items: pageItems, hasMore: pageHasMore } = await productService.getProductsPaginated({
         page: targetPage,
         limit: pageSize,
@@ -80,16 +71,10 @@ export function usePaginatedProducts(params: UsePaginatedProductsParams = {}): U
         includeHidden
       });
 
-      console.log('📊 [usePaginatedProducts] Página cargada:', { 
-        pageItems: pageItems.length, 
-        hasMore: pageHasMore 
-      });
-
       setItems(prev => (replace ? pageItems : [...prev, ...pageItems]));
       setHasMore(pageHasMore);
       setPage(targetPage);
     } catch (e: any) {
-      console.error('❌ [usePaginatedProducts] Error:', e);
       setError(e?.message || 'Error cargando productos');
     } finally {
       setIsInitialLoading(false);

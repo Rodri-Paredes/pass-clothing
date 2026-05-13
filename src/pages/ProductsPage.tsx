@@ -15,10 +15,12 @@ import { usePaginatedProducts } from '../hooks/usePaginatedProducts';
 import { dropsService } from '../services/dropsService';
 import { productService } from '../services/productService';
 import type { Drop } from '../lib/types';
+import { useToastStore } from '../store/toastStore';
 
 const ProductsPage: React.FC = () => {
   const { deleteProduct, toggleProductVisibility } = useProductStore();
   const { user } = useAuthStore();
+  const addToast = useToastStore((s) => s.addToast);
   const { loadActiveDiscountsMap, getProductDiscount } = useDiscountStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -70,22 +72,15 @@ const ProductsPage: React.FC = () => {
   const handleDelete = async (id: string) => {
     if (window.confirm('¿Estás seguro de que quieres eliminar este producto? Esta acción no se puede deshacer y eliminará todas las variantes y stock asociados.')) {
       try {
-        console.log(`🗑️ [ProductsPage] Iniciando eliminación de producto: ${id}`);
         await deleteProduct(id);
-        console.log(`✅ [ProductsPage] Producto eliminado exitosamente: ${id}`);
         
-        // Mostrar notificación de éxito
-        alert('Producto eliminado exitosamente');
-        
-        // Recargar la lista de productos
+        addToast('Producto eliminado exitosamente', 'success');
         reload();
         
       } catch (error: any) {
         console.error('❌ [ProductsPage] Error eliminando producto:', error);
-        
-        // Mostrar mensaje de error más específico
         const errorMessage = error?.message || 'Error desconocido al eliminar el producto';
-        alert(`Error al eliminar el producto: ${errorMessage}`);
+        addToast(`Error al eliminar el producto: ${errorMessage}`, 'error');
       }
     }
   };
@@ -132,7 +127,7 @@ const ProductsPage: React.FC = () => {
       setProductToToggle(null);
     } catch (error: any) {
       console.error('Error cambiando visibilidad:', error);
-      alert(`Error al cambiar la visibilidad: ${error?.message || 'Error desconocido'}`);
+      addToast(`Error al cambiar la visibilidad: ${error?.message || 'Error desconocido'}`, 'error');
     }
   };
 

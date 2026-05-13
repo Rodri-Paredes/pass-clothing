@@ -45,51 +45,37 @@ export class CashClosureService {
     totalIncomes: number;
     netFlow: number;
   }> {
-    // Obtener ventas del día con zona horaria local - consulta directa
+    // Obtener ventas del día con zona horaria local — single query with joins
     const startDate = `${date}T00:00:00-04:00`;
     const endDate = `${date}T23:59:59-04:00`;
-    
-    const { data: dailySales, error: salesError } = await supabase
+
+    const { data: salesDetailed, error: salesError } = await supabase
       .from('sales')
-      .select('*')
+      .select(`
+        id, user_id, branch_id, total, subtotal, discount_amount,
+        sale_date, payment_type, payment_details, sale_channel, notes, created_at,
+        user:users!left(name),
+        sale_items(
+          id, variant_id, quantity, unit_price, subtotal,
+          variant:product_variants(
+            size,
+            product:products(name)
+          )
+        )
+      `)
       .eq('branch_id', branchId)
       .gte('sale_date', startDate)
       .lte('sale_date', endDate)
       .order('sale_date', { ascending: true });
 
-    console.log('Direct query result:', { dailySales, error: salesError, date, branchId });
-
     if (salesError) throw salesError;
 
-    // Enriquecer ventas con usuario (y cualquier otro campo necesario)
-    let salesDetailed: any[] = [];
-    if (dailySales && dailySales.length > 0) {
-      const saleIds = dailySales.map((s: any) => s.id);
-      const { data: detailed, error: detailErr } = await supabase
-        .from('sales')
-        .select(`
-          *,
-          user:users!left(name),
-          sale_items (
-            *,
-            variant:product_variants (
-              *,
-              product:products (name)
-            )
-          )
-        `)
-        .eq('branch_id', branchId)
-        .in('id', saleIds)
-        .order('sale_date', { ascending: true });
-      if (detailErr) throw detailErr;
-      salesDetailed = detailed || [];
-    }
-
-    // Obtener movimientos de caja del día (solo movimientos manuales, NO ventas) - consulta directa
+    // Obtener movimientos de caja del día con usuario incluído en el join
     const { data: cashMovementsBase, error: movementsError } = await supabase
       .from('cash_movements')
       .select(`
-        *,
+        id, user_id, cash_register_id, movement_type, payment_type, amount, description, reference_id, created_at,
+        user:users!left(name),
         cash_registers!inner(branch_id)
       `)
       .eq('cash_registers.branch_id', branchId)
@@ -100,26 +86,8 @@ export class CashClosureService {
 
     if (movementsError) throw movementsError;
 
-    // Enriquecer movimientos con usuario
-    let cashMovements: any[] = [];
-    if (cashMovementsBase && cashMovementsBase.length > 0) {
-      const userIds = [...new Set(cashMovementsBase.map((m: any) => m.user_id))];
-      const { data: users, error: usersError } = await supabase
-        .from('users')
-        .select('id, name')
-        .in('id', userIds);
-      
-      if (usersError) throw usersError;
-      
-      const userMap = new Map(users?.map(u => [u.id, u.name]) || []);
-      cashMovements = cashMovementsBase.map(m => ({
-        ...m,
-        user: { name: userMap.get(m.user_id) || 'Usuario desconocido' }
-      }));
-    }
-
     const salesData = salesDetailed || [];
-    const movementsData = cashMovements || [];
+    const movementsData = cashMovementsBase || [];
 
     // Separar movimientos en ingresos y egresos
     const expensesData = movementsData.filter(movement => movement.movement_type === 'EGRESO');
@@ -130,18 +98,6 @@ export class CashClosureService {
     const totalExpenses = expensesData.reduce((sum, expense) => sum + expense.amount, 0);
     const totalIncomes = incomesData.reduce((sum, income) => sum + income.amount, 0);
     const netFlow = totalSales + totalIncomes - totalExpenses;
-
-    // Debug: mostrar los datos
-    console.log('Cash Flow Debug:', {
-      sales: salesData.length,
-      totalSales,
-      expenses: expensesData.length,
-      totalExpenses,
-      incomes: incomesData.length,
-      totalIncomes,
-      netFlow,
-      salesData: salesData.map(s => ({ id: s.id, sale_date: s.sale_date, total: s.total }))
-    });
 
     return {
       sales: salesData,

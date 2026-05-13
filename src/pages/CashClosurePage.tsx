@@ -7,6 +7,7 @@ import { useAuthStore } from '../store/authStore';
 import { useSalesStore } from '../store/salesStore';
 import { cashClosureService } from '../services/cashClosureService';
 import type { DailyReport } from '../lib/types';
+import { useToastStore } from '../store/toastStore';
 
 // Nuevo: funciones para totales por tipo de pago
 import { supabase } from '../lib/supabase';
@@ -14,6 +15,7 @@ import { supabase } from '../lib/supabase';
 const CashClosurePage: React.FC = () => {
   const { activeBranch, user } = useAuthStore();
   const { } = useSalesStore();
+  const addToast = useToastStore((s) => s.addToast);
   const getLocalDateString = () => {
     // Obtener fecha actual en zona horaria de Bolivia y formatearla a yyyy-mm-dd
     const laPazNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/La_Paz' }));
@@ -68,7 +70,7 @@ const loadTotals = async () => {
     
     const { data: dailySales, error: salesError } = await supabase
       .from('sales')
-      .select('*')
+      .select('id, total, payment_type, payment_details, discount_amount')
       .eq('branch_id', activeBranch.id)
       .gte('sale_date', startDate)
       .lte('sale_date', endDate);
@@ -163,16 +165,14 @@ const loadTotals = async () => {
 
   const loadCashFlow = async () => {
     if (!activeBranch) return;
-    
-    console.log('Loading cash flow for date:', selectedDate);
     setIsLoadingCashFlow(true);
     try {
       const cashFlow = await cashClosureService.getDailyCashFlow(activeBranch.id, selectedDate);
-      console.log('Cash flow data:', cashFlow);
       setCashFlowData(cashFlow);
     } catch (error) {
       console.error('Error loading cash flow:', error);
       setCashFlowData(null);
+      addToast('Error al cargar el flujo de caja', 'error');
     } finally {
       setIsLoadingCashFlow(false);
     }
@@ -200,23 +200,23 @@ const loadTotals = async () => {
       // Recargar datos
       await loadCashFlow();
       
-      alert('Movimiento agregado exitosamente');
+      addToast('Movimiento agregado exitosamente', 'success');
     } catch (error) {
       console.error('Error adding cash movement:', error);
-      alert('Error al agregar movimiento: ' + (error as Error).message);
+      addToast('Error al agregar movimiento: ' + (error as Error).message, 'error');
     }
   };
 
 
   const loadDailyReport = async () => {
     if (!activeBranch) return;
-    
     setIsLoading(true);
     try {
       const report = await cashClosureService.getDailyReport(activeBranch.id, selectedDate);
       setDailyReport(report);
     } catch (error) {
       console.error('Error loading daily report:', error);
+      addToast('Error al cargar el reporte diario', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -341,53 +341,30 @@ const loadTotals = async () => {
 
   const handleSalesCardClick = async () => {
     if (!activeBranch) return;
-    
-    console.log('handleSalesCardClick called for date:', selectedDate, 'branch:', activeBranch.id);
-    
     try {
-      // Obtener ventas del día con consulta directa usando rango de fechas
       const startDate = `${selectedDate}T00:00:00-04:00`;
       const endDate = `${selectedDate}T23:59:59-04:00`;
-      
-      const { data: dailySales, error: salesError } = await supabase
-        .from('sales')
-        .select('*')
-        .eq('branch_id', activeBranch.id)
-        .gte('sale_date', startDate)
-        .lte('sale_date', endDate);
 
-      console.log('Sales query result:', { dailySales, error: salesError });
-
-      if (salesError) throw salesError;
-
-      const sales = dailySales || [];
-      console.log('Found sales:', sales.length);
-      if (sales.length === 0) {
-        setSalesList([]);
-        setShowSalesList(true);
-        return;
-      }
-
-      const ids = sales.map(s => s.id);
+      // Single query with full joins — no double-fetch
       const { data: detailed, error: qError } = await supabase
         .from('sales')
         .select(`
-          *,
+          id, total, subtotal, discount_amount, payment_type, payment_details, sale_date, notes, sale_channel,
           sale_items (
-            *,
+            id, quantity, unit_price, subtotal,
             variant:product_variants (
-              *,
+              size,
               product:products (name)
             )
           ),
           user:users (name)
         `)
         .eq('branch_id', activeBranch.id)
-        .in('id', ids)
+        .gte('sale_date', startDate)
+        .lte('sale_date', endDate)
         .order('sale_date', { ascending: false });
 
       if (qError) throw qError;
-
       setSalesList(detailed || []);
       setShowSalesList(true);
     } catch (error) {
@@ -397,27 +374,20 @@ const loadTotals = async () => {
 
   const handleUnitsCardClick = async () => {
     if (!activeBranch) return;
-    
-    console.log('handleUnitsCardClick called for date:', selectedDate, 'branch:', activeBranch.id);
-    
     try {
-      // Obtener las ventas del día con consulta directa usando rango de fechas
       const startDate = `${selectedDate}T00:00:00-04:00`;
       const endDate = `${selectedDate}T23:59:59-04:00`;
-      
+
       const { data: dailySales, error: salesError } = await supabase
         .from('sales')
-        .select('*')
+        .select('id')
         .eq('branch_id', activeBranch.id)
         .gte('sale_date', startDate)
         .lte('sale_date', endDate);
 
-      console.log('Units query result:', { dailySales, error: salesError });
-
       if (salesError) throw salesError;
 
       const sales = dailySales || [];
-      console.log('Found sales for units:', sales.length);
       if (sales.length > 0) {
         const saleIds = sales.map(sale => sale.id);
         

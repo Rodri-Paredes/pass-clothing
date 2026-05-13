@@ -7,8 +7,10 @@ import * as DropComponents from '../components/drops/DropComponents';
 import { DropProductManager } from '../components/drops/DropProductManager';
 import { dropsService } from '../services/dropsService';
 import type { Drop, DropStats } from '../lib/types';
+import { useToastStore } from '../store/toastStore';
 
 const DropsPage: React.FC = () => {
+  const addToast = useToastStore((s) => s.addToast);
   const [drops, setDrops] = useState<Drop[]>([]);
   const [filteredDrops, setFilteredDrops] = useState<Drop[]>([]);
   const [stats, setStats] = useState<DropStats>({
@@ -103,7 +105,7 @@ const DropsPage: React.FC = () => {
       await loadDrops();
     } catch (error) {
       console.error('Error creating drop:', error);
-      alert('Error al crear el drop. Por favor, intenta nuevamente.');
+      addToast('Error al crear el drop. Por favor, intenta nuevamente.', 'error');
     }
   }, [loadDrops]);
 
@@ -117,7 +119,7 @@ const DropsPage: React.FC = () => {
       await loadDrops();
     } catch (error) {
       console.error('Error updating drop:', error);
-      alert('Error al actualizar el drop. Por favor, intenta nuevamente.');
+      addToast('Error al actualizar el drop. Por favor, intenta nuevamente.', 'error');
     }
   }, [selectedDrop, loadDrops]);
 
@@ -131,7 +133,7 @@ const DropsPage: React.FC = () => {
       await loadDrops();
     } catch (error) {
       console.error('Error deleting drop:', error);
-      alert('Error al eliminar el drop. Por favor, intenta nuevamente.');
+      addToast('Error al eliminar el drop. Por favor, intenta nuevamente.', 'error');
     }
   }, [selectedDrop, loadDrops]);
 

@@ -1,6 +1,5 @@
 import { supabase } from '../lib/supabase';
 import type { Sale, DashboardStats, MixedPaymentBreakdown, SalesWithDiscounts, MonthlyRevenueReport, MonthlyRevenueComparison } from '../lib/types';
-import { toBoliviaStartOfDay, toBoliviaEndOfDay } from '../lib/constants';
 
 export class SalesService {
   async createSale(
@@ -20,58 +19,100 @@ export class SalesService {
     const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
     const total = Math.max(0, subtotal - discountAmount);
 
-    // Verificar stock antes de crear la venta
-    for (const item of items) {
-      const { data: currentStock, error: stockError } = await supabase
-        .from('stock')
-        .select('quantity')
-        .eq('variant_id', item.variantId)
-        .eq('branch_id', branchId)
-        .single();
-
-      if (stockError) throw stockError;
-      if (!currentStock || currentStock.quantity < item.quantity) {
-        throw new Error(`Stock insuficiente para el producto`);
-      }
-    }
-
-    // Crear la venta con timestamp correcto de Bolivia
-    // Usar una función más simple y directa
+    // Bolivia timestamp
     const now = new Date();
     const boliviaTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/La_Paz' }));
-    
-    // Crear timestamp ISO manualmente con offset de Bolivia
     const year = boliviaTime.getFullYear();
     const month = String(boliviaTime.getMonth() + 1).padStart(2, '0');
     const day = String(boliviaTime.getDate()).padStart(2, '0');
     const hours = String(boliviaTime.getHours()).padStart(2, '0');
     const minutes = String(boliviaTime.getMinutes()).padStart(2, '0');
     const seconds = String(boliviaTime.getSeconds()).padStart(2, '0');
-    
     const saleDateISO = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}-04:00`;
-    
-    console.log('Creating sale with Bolivia time:', saleDateISO);
+
+    // Attempt: single atomic transaction via create_sale_atomic RPC.
+    // This locks stock rows, inserts sale + items, and decrements stock
+    // inside one SERIALIZABLE transaction — no orphaned sales possible.
+    const rpcItems = items.map((i) => ({
+      variantId: i.variantId,
+      quantity:  i.quantity,
+      unitPrice: i.unitPrice,
+    }));
+
+    const { data: rpcResult, error: rpcErr } = await supabase.rpc('create_sale_atomic', {
+      p_branch_id:       branchId,
+      p_user_id:         userId,
+      p_items:           rpcItems,
+      p_payment_type:    paymentType,
+      p_subtotal:        subtotal,
+      p_discount_amount: discountAmount,
+      p_total:           total,
+      p_sale_date:       saleDateISO,
+      p_payment_details: paymentType === 'MIXTO' && paymentDetails ? paymentDetails : null,
+      p_notes:           notes && notes.trim() ? notes.trim() : null,
+      p_sale_channel:    saleChannel,
+    });
+
+    // If the atomic RPC is not yet deployed, fall back to the legacy multi-step flow.
+    // REMOVE this fallback once create_sale_atomic migration has been executed in DB.
+    if (rpcErr && (rpcErr.code === 'PGRST202' || rpcErr.message?.includes('does not exist') || rpcErr.message?.includes('function'))) {
+      return this._createSaleLegacy(
+        items, branchId, userId, paymentType,
+        discountAmount, paymentDetails, notes, saleChannel,
+        subtotal, total, saleDateISO
+      );
+    }
+
+    if (rpcErr) throw rpcErr;
+    return rpcResult as Sale;
+  }
+
+  /** Legacy multi-step sale creation — used as fallback until create_sale_atomic is deployed. */
+  private async _createSaleLegacy(
+    items: Array<{ variantId: string; quantity: number; unitPrice: number }>,
+    branchId: string,
+    userId: string,
+    paymentType: 'QR' | 'EFECTIVO' | 'TARJETA' | 'MIXTO',
+    discountAmount: number,
+    paymentDetails: { efectivo?: number; qr?: number; tarjeta?: number } | undefined,
+    notes: string | undefined,
+    saleChannel: 'TIENDA' | 'WEB',
+    subtotal: number,
+    total: number,
+    saleDateISO: string,
+  ): Promise<Sale> {
+    // Client-side pre-check (best-effort; DB atomic decrement is the real guard)
+    const variantIds = items.map((i) => i.variantId);
+    const { data: stockRows, error: stockBatchError } = await supabase
+      .from('stock')
+      .select('variant_id, quantity')
+      .eq('branch_id', branchId)
+      .in('variant_id', variantIds);
+
+    if (stockBatchError) throw stockBatchError;
+
+    const stockMap = new Map(
+      (stockRows || []).map((r) => [r.variant_id, r.quantity as number])
+    );
+    for (const item of items) {
+      const available = stockMap.get(item.variantId) ?? 0;
+      if (available < item.quantity) {
+        throw new Error('Stock insuficiente para el producto');
+      }
+    }
 
     const saleData: any = {
-      user_id: userId,
-      branch_id: branchId,
+      user_id:         userId,
+      branch_id:       branchId,
       subtotal,
       discount_amount: discountAmount,
       total,
-      sale_date: saleDateISO,
-      payment_type: paymentType,
-      sale_channel: saleChannel
+      sale_date:       saleDateISO,
+      payment_type:    paymentType,
+      sale_channel:    saleChannel,
     };
-
-    // Agregar notas si existen
-    if (notes && notes.trim()) {
-      saleData.notes = notes.trim();
-    }
-
-    // Agregar detalles de pago mixto si es necesario
-    if (paymentType === 'MIXTO' && paymentDetails) {
-      saleData.payment_details = paymentDetails;
-    }
+    if (notes && notes.trim())                       saleData.notes = notes.trim();
+    if (paymentType === 'MIXTO' && paymentDetails)   saleData.payment_details = paymentDetails;
 
     const { data: sale, error: saleError } = await supabase
       .from('sales')
@@ -81,22 +122,17 @@ export class SalesService {
 
     if (saleError) throw saleError;
 
-    // Crear los items de la venta
-    const saleItems = items.map(item => ({
-      sale_id: sale.id,
+    const saleItems = items.map((item) => ({
+      sale_id:    sale.id,
       variant_id: item.variantId,
-      quantity: item.quantity,
+      quantity:   item.quantity,
       unit_price: item.unitPrice,
-      subtotal: item.quantity * item.unitPrice
+      subtotal:   item.quantity * item.unitPrice,
     }));
 
-    const { error: itemsError } = await supabase
-      .from('sale_items')
-      .insert(saleItems);
-
+    const { error: itemsError } = await supabase.from('sale_items').insert(saleItems);
     if (itemsError) throw itemsError;
 
-    // Actualizar stock después de crear la venta
     for (const item of items) {
       await this.updateStockAfterSale(item.variantId, branchId, item.quantity);
     }
@@ -158,7 +194,8 @@ export class SalesService {
         )
       `)
       .eq('branch_id', branchId)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(200); // Prevent unbounded payload — paginate incrementally if more needed
 
     if (error) throw error;
     return data as any || [];
@@ -191,149 +228,28 @@ export class SalesService {
   }
 
   async getDashboardStats(branchId: string): Promise<DashboardStats> {
-    // Usar zona horaria de Bolivia para calcular inicio de mes
-    const laPazNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/La_Paz' }));
-    const year = laPazNow.getFullYear();
-    const month = laPazNow.getMonth(); // 0-indexed
-    
-    // Formato: YYYY-MM-01T00:00:00-04:00
-    const startOfMonthDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-    const startOfMonthStr = toBoliviaStartOfDay(startOfMonthDate);
+    // Single server-side aggregation via RPC (replaces 7 sequential queries)
+    const { data, error } = await supabase.rpc('get_dashboard_stats', {
+      p_branch_id: branchId,
+    });
 
-    // Monthly total revenue
-    const { data: monthlyData, error: monthlyError } = await supabase
-      .from('sales')
-      .select('total')
-      .eq('branch_id', branchId)
-      .gte('sale_date', startOfMonthStr);
+    if (error) throw error;
 
-    if (monthlyError) throw monthlyError;
-
-    const monthlyTotal = monthlyData?.reduce((sum, sale) => sum + sale.total, 0) || 0;
-
-    // Monthly sales count (del mes actual, no histórico)
-    const { count: monthlySalesCount, error: monthlyCountError } = await supabase
-      .from('sales')
-      .select('*', { count: 'exact', head: true })
-      .eq('branch_id', branchId)
-      .gte('sale_date', startOfMonthStr);
-
-    if (monthlyCountError) throw monthlyCountError;
-
-    // Total sales count (histórico - para referencia)
-    const { count: totalSales, error: countError } = await supabase
-      .from('sales')
-      .select('*', { count: 'exact', head: true })
-      .eq('branch_id', branchId);
-
-    if (countError) throw countError;
-
-    // Monthly items sold (prendas vendidas del mes)
-    const { data: monthlySalesIds, error: monthlySalesIdsError } = await supabase
-      .from('sales')
-      .select('id')
-      .eq('branch_id', branchId)
-      .gte('sale_date', startOfMonthStr);
-
-    if (monthlySalesIdsError) throw monthlySalesIdsError;
-
-    let monthlyItemsSold = 0;
-    if (monthlySalesIds && monthlySalesIds.length > 0) {
-      const saleIds = monthlySalesIds.map(s => s.id);
-      const { data: itemsData, error: itemsError } = await supabase
-        .from('sale_items')
-        .select('quantity')
-        .in('sale_id', saleIds);
-
-      if (!itemsError && itemsData) {
-        monthlyItemsSold = itemsData.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-      }
-    }
-
-    // Top product (simplified query)
-    // ✅ OPTIMIZADO: Solo campos necesarios
-    const { data: topProductData, error: topProductError } = await supabase
-      .from('sale_items')
-      .select(`
-        variant_id,
-        quantity,
-        variant:product_variants(
-          id,
-          size,
-          product:products(id, name)
-        )
-      `)
-      .limit(1);
-
-    if (topProductError) throw topProductError;
-
-    // Low stock products
-    // ✅ OPTIMIZADO: Solo campos necesarios
-    const { data: lowStockData, error: lowStockError } = await supabase
-      .from('stock')
-      .select(`
-        id,
-        variant_id,
-        quantity,
-        variant:product_variants(
-          id,
-          size,
-          product:products(id, name, price)
-        )
-      `)
-      .eq('branch_id', branchId)
-      .lt('quantity', 5)
-      .order('quantity', { ascending: true });
-
-    if (lowStockError) throw lowStockError;
-
-    // Daily sales for last 7 days (usando zona horaria de Bolivia)
-    const laPazNow7 = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/La_Paz' }));
-    laPazNow7.setDate(laPazNow7.getDate() - 7);
-    const year7 = laPazNow7.getFullYear();
-    const month7 = String(laPazNow7.getMonth() + 1).padStart(2, '0');
-    const day7 = String(laPazNow7.getDate()).padStart(2, '0');
-    const last7DaysDate = `${year7}-${month7}-${day7}`;
-    const last7DaysStr = toBoliviaStartOfDay(last7DaysDate);
-
-    const { data: dailySalesData, error: dailySalesError } = await supabase
-      .from('sales')
-      .select('total, sale_date')
-      .eq('branch_id', branchId)
-      .gte('sale_date', last7DaysStr)
-      .order('sale_date', { ascending: true });
-
-    if (dailySalesError) throw dailySalesError;
-
-    const dailySales = dailySalesData?.map(sale => ({
-      date: new Date(sale.sale_date).toLocaleDateString('es-ES', { timeZone: 'America/La_Paz' }),
-      total: sale.total
-    })) || [];
-
-    const getFirst = (value: any) => Array.isArray(value) ? (value[0] ?? undefined) : value;
-
+    const raw = data as any;
     return {
-      monthlyTotal,
-      monthlySalesCount: monthlySalesCount || 0,
-      monthlyItemsSold,
-      totalSales: totalSales || 0,
-      topProduct: (Array.isArray(topProductData) && topProductData.length > 0 && topProductData[0].variant?.[0]?.product?.[0]?.name)
-        ? {
-            name: topProductData[0].variant[0].product[0].name,
-            total_sold: topProductData[0].quantity
-          }
-        : undefined,
-      lowStockProducts: Array.isArray(lowStockData)
-        ? lowStockData.map(item => {
-            const variant = getFirst(item.variant);
-            const product = getFirst(variant?.product);
-            return {
-              name: (product?.name as string) || 'Producto',
-              quantity: item.quantity as number
-            };
-          })
-        : [],
-      dailySales
+      monthlyTotal:      raw?.monthlyTotal      ?? 0,
+      monthlySalesCount: raw?.monthlySalesCount ?? 0,
+      monthlyItemsSold:  raw?.monthlyItemsSold  ?? 0,
+      totalSales:        raw?.totalSales        ?? 0,
+      topProduct:        raw?.topProduct        ?? undefined,
+      lowStockProducts:  raw?.lowStockProducts  ?? [],
+      // RPC returns DATE strings; format for UI locale
+      dailySales: (raw?.dailySales ?? []).map((d: any) => ({
+        date: new Date(d.date + 'T12:00:00-04:00').toLocaleDateString('es-ES', {
+          timeZone: 'America/La_Paz',
+        }),
+        total: Number(d.total) || 0,
+      })),
     };
   }
 

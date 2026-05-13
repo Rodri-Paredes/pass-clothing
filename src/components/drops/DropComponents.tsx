@@ -18,6 +18,7 @@ import Card from '../ui/Card';
 import Input from '../ui/Input';
 import { supabase } from '../../lib/supabase';
 import type { Drop, DropStats } from '../../lib/types';
+import { useToastStore } from '../../store/toastStore';
 
 interface DropCardProps {
   drop: Drop;
@@ -238,7 +239,7 @@ export const DropForm: React.FC<DropFormProps> = ({
       onSave(dropData);
     } catch (error) {
       console.error('Error uploading images:', error);
-      alert('Error al subir las imágenes. Por favor, intenta nuevamente.');
+      useToastStore.getState().addToast('Error al subir las imágenes. Por favor, intenta nuevamente.', 'error');
     } finally {
       setUploading(false);
     }

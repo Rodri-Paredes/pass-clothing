@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { User, Branch } from '../lib/types';
 import { authService } from '../services/authService';
 import { branchService } from '../services/branchService';
+import { supabase } from '../lib/supabase';
 
 interface AuthState {
   user: User | null;
@@ -110,3 +111,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   }
 }));
+
+// Listen for auth state changes (token refresh, sign-out from another tab, session expiry)
+supabase.auth.onAuthStateChange((event) => {
+  if (event === 'SIGNED_OUT') {
+    useAuthStore.setState({
+      user: null,
+      activeBranch: null,
+      branches: [],
+      isAuthenticated: false,
+      isLoading: false,
+    });
+  }
+});

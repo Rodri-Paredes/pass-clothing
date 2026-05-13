@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, ShoppingCart, Calendar, Search, Package, Minus, CheckCircle, Edit, Percent } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
@@ -10,6 +10,7 @@ import { useProductStore } from '../store/productStore';
 import { useSalesStore } from '../store/salesStore';
 import { useAuthStore } from '../store/authStore';
 import { useDiscountStore } from '../store/discountStore';
+import { useToastStore } from '../store/toastStore';
 import { CATEGORIES, SALE_CHANNELS } from '../lib/constants';
 import { usePaginatedProducts } from '../hooks/usePaginatedProducts';
 
@@ -24,6 +25,8 @@ const SalesPage: React.FC = () => {
   const { activeBranch, user } = useAuthStore();
   const { stock, loadStockByBranch } = useProductStore();
   const { activeDiscountsMap, loadActiveDiscountsMap } = useDiscountStore();
+  const addToast = useToastStore((s) => s.addToast);
+  const notify = useToastStore((s) => s.notify);
   const [showSalesForm, setShowSalesForm] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -44,6 +47,8 @@ const SalesPage: React.FC = () => {
   const [saleToEdit, setSaleToEdit] = useState<any | null>(null);
   const [saleChannel, setSaleChannel] = useState<'TIENDA' | 'WEB'>('TIENDA');
   const [filterChannel, setFilterChannel] = useState<string>('');
+  // Ref guard: prevents concurrent sale submissions (double-click or rapid retry)
+  const isProcessingRef = useRef(false);
 
   useEffect(() => {
     if (activeBranch) {
@@ -108,7 +113,13 @@ const SalesPage: React.FC = () => {
   const handleAddToCart = (product: any) => {
     // product must have variant_id
     const variantStock = stock.find(s => s.variant_id === product.variant_id);
-    if (!variantStock || variantStock.quantity === 0) return;
+    if (!variantStock || variantStock.quantity === 0) {
+      notify('stock_insufficient', 'Sin stock disponible para esta talla', {
+        branchId: activeBranch?.id,
+        details: { variant_id: product.variant_id },
+      });
+      return;
+    }
 
     // Aplicar descuento si existe
     const finalPrice = getDiscountedPrice(product.id, product.price);
@@ -184,7 +195,26 @@ const SalesPage: React.FC = () => {
 
   const handleProcessSale = async () => {
     if (cart.length === 0 || !activeBranch || !user) return;
+    // Hard guard: block concurrent submissions even if React state hasn't updated yet
+    if (isProcessingRef.current) return;
 
+    // Validate MIXTO payment totals before submitting
+    if (paymentType === 'MIXTO') {
+      const expectedTotal = getTotalAmount();
+      const mixedSum =
+        (mixedPaymentDetails.efectivo || 0) +
+        (mixedPaymentDetails.qr || 0) +
+        (mixedPaymentDetails.tarjeta || 0);
+      if (Math.abs(mixedSum - expectedTotal) > 0.01) {
+        addToast(
+          `El total de pago mixto (Bs ${mixedSum.toFixed(2)}) no coincide con el total de la venta (Bs ${expectedTotal.toFixed(2)})`,
+          'error'
+        );
+        return;
+      }
+    }
+
+    isProcessingRef.current = true;
     setIsProcessingSale(true);
     try {
       const items = cart.map(item => ({
@@ -210,9 +240,17 @@ const SalesPage: React.FC = () => {
         loadStockByBranch(activeBranch.id);
       }
       setShowSuccessModal(true);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error processing sale:', error);
+      const msg = error?.message || 'Error desconocido al procesar la venta';
+      const isStockError = msg.toLowerCase().includes('stock');
+      notify(
+        isStockError ? 'stock_insufficient' : 'sale_failed',
+        msg,
+        { branchId: activeBranch?.id, userId: user?.id, details: { items: cart.length } }
+      );
     } finally {
+      isProcessingRef.current = false;
       setIsProcessingSale(false);
     }
   };

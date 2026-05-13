@@ -12,6 +12,8 @@ import CashClosurePage from './pages/CashClosurePage';
 import UsersPage from './pages/UsersPage';
 import SettingsPage from './pages/SettingsPage';
 import DiscountsPage from './pages/DiscountsPage';
+import HealthDashboardPage from './pages/HealthDashboardPage';
+import ToastContainer from './components/ui/Toast';
 
 function App() {
   const { user, activeBranch, isLoading, isAuthenticated, loadUser } = useAuthStore();
@@ -37,26 +39,30 @@ function App() {
   }
 
   return (
-    <Routes>
-      <Route path="/" element={<Layout />}>
-        <Route index element={<Navigate to="/dashboard" replace />} />
-        <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/products" element={<ProductsPage />} />
-        <Route path="/drops" element={<DropsPage />} />
-        <Route path="/discounts" element={<DiscountsPage />} />
-        <Route path="/sales" element={<SalesPage />} />
-        {/* <Route path="/reports" element={<DashboardPage />} /> */}
-        <Route path="/cash-closure" element={<CashClosurePage />} />
-        {/* <Route path="/diagnostic" element={<DiagnosticPage />} />
-        <Route path="/cash-flow" element={<CashFlowPage />} /> */}
-        {user?.role === 'admin' && (
-          <>
-            <Route path="/users" element={<UsersPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-          </>
-        )}
-      </Route>
-    </Routes>
+    <>
+      <ToastContainer />
+      <Routes>
+        <Route path="/" element={<Layout />}>
+          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/products" element={<ProductsPage />} />
+          <Route path="/drops" element={<DropsPage />} />
+          <Route path="/discounts" element={<DiscountsPage />} />
+          <Route path="/sales" element={<SalesPage />} />
+          {/* <Route path="/reports" element={<DashboardPage />} /> */}
+          <Route path="/cash-closure" element={<CashClosurePage />} />
+          {/* <Route path="/diagnostic" element={<DiagnosticPage />} />
+          <Route path="/cash-flow" element={<CashFlowPage />} /> */}
+          {user?.role === 'admin' && (
+            <>
+              <Route path="/users" element={<UsersPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/health" element={<HealthDashboardPage />} />
+            </>
+          )}
+        </Route>
+      </Routes>
+    </>
   );
 }
 

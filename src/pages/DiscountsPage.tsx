@@ -8,10 +8,12 @@ import DiscountList from '../components/discounts/DiscountList';
 import { useDiscountStore } from '../store/discountStore';
 import { discountService } from '../services/discountService';
 import type { Discount, DiscountStatus } from '../lib/types';
+import { useToastStore } from '../store/toastStore';
 
 const DiscountsPage: React.FC = () => {
   const { discounts, isLoading, loadDiscounts, deleteDiscount, toggleDiscountActive } =
     useDiscountStore();
+  const addToast = useToastStore((s) => s.addToast);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -59,7 +61,7 @@ const DiscountsPage: React.FC = () => {
       setShowDeleteModal(false);
       setSelectedDiscount(null);
     } catch (error: any) {
-      alert(`Error al eliminar: ${error.message}`);
+      addToast(`Error al eliminar: ${error.message}`, 'error');
     }
   }, [selectedDiscount, deleteDiscount]);
 
@@ -68,10 +70,10 @@ const DiscountsPage: React.FC = () => {
       try {
         await toggleDiscountActive(discount.id);
       } catch (error: any) {
-        alert(`Error: ${error.message}`);
+        addToast(`Error: ${error.message}`, 'error');
       }
     },
-    [toggleDiscountActive]
+    [toggleDiscountActive, addToast]
   );
 
   const handleSave = useCallback(() => {

@@ -10,7 +10,8 @@ import {
   Store,
   X,
   Star,
-  Percent
+  Percent,
+  Activity
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 
@@ -44,7 +45,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
     { name: 'Diagnóstico', href: '/diagnostic', icon: Database }, */
     ...(user?.role === 'admin' ? [
       { name: 'Usuarios', href: '/users', icon: Users },
-      { name: 'Configuración', href: '/settings', icon: Settings }
+      { name: 'Configuración', href: '/settings', icon: Settings },
+      { name: 'Diagnóstico', href: '/health', icon: Activity }
     ] : [])
   ];
 

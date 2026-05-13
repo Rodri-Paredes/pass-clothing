@@ -8,8 +8,6 @@ export const CATEGORIES = [
   'Gorras',
   'Tops',
   'TrackSuit Basic',
-  ''
-
 ] as const;
 
 export const SIZES = [

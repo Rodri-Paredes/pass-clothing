@@ -21,8 +21,6 @@ export class ProductService {
     includeHidden?: boolean;
   }): Promise<{ items: Product[]; hasMore: boolean }> {
     const { page, limit, search, category, includeHidden = false } = params;
-    console.log('🔍 [ProductService] Búsqueda de productos:', { page, limit, search, category, includeHidden });
-    
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
@@ -50,23 +48,17 @@ export class ProductService {
 
     if (search && search.trim()) {
       const term = `%${search.trim()}%`;
-      console.log('🔍 [ProductService] Aplicando filtro de búsqueda:', term);
       query = query.or(`name.ilike.${term},description.ilike.${term}`);
     }
 
     if (category && category.trim()) {
-      console.log('🔍 [ProductService] Aplicando filtro de categoría:', category);
       query = query.eq('category', category.trim());
     }
 
     const { data, error } = await query;
-    if (error) {
-      console.error('❌ [ProductService] Error en consulta:', error);
-      throw error;
-    }
+    if (error) throw error;
     
     const items = (data as Product[]) || [];
-    console.log('📊 [ProductService] Productos encontrados:', items.length);
     const hasMore = items.length === limit; // heurística sin count
     return { items, hasMore };
   }
@@ -147,7 +139,6 @@ export class ProductService {
   }
 
   async deleteProduct(id: string): Promise<void> {
-    console.log(`🗑️ [ProductService] Iniciando eliminación de producto: ${id}`);
     
     try {
       // 1. Obtener información del producto antes de eliminarlo
@@ -166,25 +157,17 @@ export class ProductService {
         throw new Error('Producto no encontrado');
       }
 
-      console.log(`📦 [ProductService] Producto encontrado: ${product.name}`);
-
       // 2. Eliminar imagen del storage si existe
       if (product.image_url) {
         try {
           // Extraer el nombre del archivo de la URL
           const fileName = product.image_url.split('/').pop();
           if (fileName) {
-            console.log(`🖼️ [ProductService] Eliminando imagen: ${fileName}`);
-            
             const { error: deleteImageError } = await supabase.storage
               .from('products')
               .remove([fileName]);
-
             if (deleteImageError) {
               console.warn('⚠️ [ProductService] No se pudo eliminar la imagen:', deleteImageError);
-              // No lanzar error, solo registrar warning
-            } else {
-              console.log(`✅ [ProductService] Imagen eliminada exitosamente: ${fileName}`);
             }
           }
         } catch (imageError) {
@@ -203,8 +186,6 @@ export class ProductService {
         console.error('❌ [ProductService] Error eliminando producto:', deleteError);
         throw deleteError;
       }
-
-      console.log(`✅ [ProductService] Producto eliminado exitosamente: ${product.name}`);
 
     } catch (error) {
       console.error('❌ [ProductService] Error en eliminación de producto:', error);
@@ -272,7 +253,6 @@ export class ProductService {
   }
 
   async updateStock(variantId: string, branchId: string, quantity: number): Promise<void> {
-    console.log(`🔄 [ProductService] Actualizando stock - Variante: ${variantId}, Sucursal: ${branchId}, Cantidad: ${quantity}`);
 
     // Verificar si ya existe un registro de stock para esta variante/sucursal
     const { data: existing, error: selectError } = await supabase
@@ -298,8 +278,6 @@ export class ProductService {
         .insert({ variant_id: variantId, branch_id: branchId, quantity });
       if (error) throw error;
     }
-
-    console.log(`✅ [ProductService] Stock actualizado exitosamente - Variante: ${variantId}, Sucursal: ${branchId}, Cantidad: ${quantity}`);
   }
 
   async uploadProductImage(file: File): Promise<string> {
@@ -319,41 +297,24 @@ export class ProductService {
   }
 
   async toggleProductVisibility(productId: string): Promise<boolean> {
-    console.log(`👁️ [ProductService] Alternando visibilidad del producto: ${productId}`);
-    
     const { data, error } = await supabase.rpc('toggle_product_visibility', {
       product_id: productId
     });
-
-    if (error) {
-      console.error('❌ [ProductService] Error alternando visibilidad:', error);
-      throw error;
-    }
-
-    console.log(`✅ [ProductService] Visibilidad actualizada: ${data}`);
+    if (error) throw error;
     return data;
   }
 
   async updateProductVisibility(productId: string, isVisible: boolean): Promise<boolean> {
-    console.log(`👁️ [ProductService] Actualizando visibilidad del producto: ${productId} a ${isVisible}`);
-    
     const { data, error } = await supabase.rpc('update_product_visibility', {
       product_id: productId,
       visible: isVisible
     });
-
-    if (error) {
-      console.error('❌ [ProductService] Error actualizando visibilidad:', error);
-      throw error;
-    }
-
-    console.log(`✅ [ProductService] Visibilidad actualizada: ${data}`);
+    if (error) throw error;
     return data;
   }
 
   // Función para verificar la integridad de los datos de stock
   async verifyStockIntegrity(variantId: string, expectedStock: { [branchId: string]: number }): Promise<any> {
-    console.log(`🔍 [ProductService] Verificando integridad de stock para variante: ${variantId}`);
     try {
       const actualStock = await this.getStockByProduct(variantId);
       const integrityReport = {
@@ -379,14 +340,10 @@ export class ProductService {
       }
 
       if (integrityReport.discrepancies.length > 0) {
-        console.warn(`⚠️ [ProductService] Discrepancias encontradas en stock:`, integrityReport.discrepancies);
-      } else {
-        console.log(`✅ [ProductService] Integridad de stock verificada correctamente`);
+        console.warn('⚠️ Stock discrepancy found:', integrityReport.discrepancies);
       }
-
       return integrityReport;
     } catch (error) {
-      console.error(`❌ [ProductService] Error verificando integridad de stock:`, error);
       throw error;
     }
   }

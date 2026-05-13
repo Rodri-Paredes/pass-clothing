@@ -389,8 +389,6 @@ export const discountService = {
   }>> {
     const map = new Map();
 
-    console.log('🔍 [DiscountService] Usando vista products_with_active_discount...');
-
     // Usar la vista que ya tiene todo calculado
     const { data, error } = await supabase
       .from('products_with_active_discount')
@@ -402,11 +400,8 @@ export const discountService = {
     }
 
     if (!data || data.length === 0) {
-      console.log('⚠️ La vista no retornó productos con descuento');
       return map;
     }
-
-    console.log(`✅ Productos con descuento encontrados: ${data.length}`);
 
     // Mapear resultados
     for (const row of data) {
@@ -421,7 +416,6 @@ export const discountService = {
       });
     }
 
-    console.log(`📊 Map final: ${map.size} productos con descuento`);
     return map;
   },
 
