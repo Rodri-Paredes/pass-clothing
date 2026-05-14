@@ -30,19 +30,17 @@ export class SalesService {
     const seconds = String(boliviaTime.getSeconds()).padStart(2, '0');
     const saleDateISO = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}-04:00`;
 
-    // Attempt: single atomic transaction via create_sale_atomic RPC.
-    // This locks stock rows, inserts sale + items, and decrements stock
-    // inside one SERIALIZABLE transaction — no orphaned sales possible.
-    const rpcItems = items.map((i) => ({
-      variantId: i.variantId,
-      quantity:  i.quantity,
-      unitPrice: i.unitPrice,
-    }));
-
+    // create_sale_atomic es la ÚNICA fuente de verdad:
+    // valida stock, inserta venta + items y decrementa stock dentro de
+    // una sola transacción en PostgreSQL. El frontend NO toca stock.
     const { data: rpcResult, error: rpcErr } = await supabase.rpc('create_sale_atomic', {
       p_branch_id:       branchId,
       p_user_id:         userId,
-      p_items:           rpcItems,
+      p_items:           items.map((i) => ({
+        variantId: i.variantId,
+        quantity:  i.quantity,
+        unitPrice: i.unitPrice,
+      })),
       p_payment_type:    paymentType,
       p_subtotal:        subtotal,
       p_discount_amount: discountAmount,
@@ -53,111 +51,8 @@ export class SalesService {
       p_sale_channel:    saleChannel,
     });
 
-    // If the atomic RPC is not yet deployed, fall back to the legacy multi-step flow.
-    // REMOVE this fallback once create_sale_atomic migration has been executed in DB.
-    if (rpcErr && (rpcErr.code === 'PGRST202' || rpcErr.message?.includes('does not exist') || rpcErr.message?.includes('function'))) {
-      return this._createSaleLegacy(
-        items, branchId, userId, paymentType,
-        discountAmount, paymentDetails, notes, saleChannel,
-        subtotal, total, saleDateISO
-      );
-    }
-
     if (rpcErr) throw rpcErr;
     return rpcResult as Sale;
-  }
-
-  /** Legacy multi-step sale creation — used as fallback until create_sale_atomic is deployed. */
-  private async _createSaleLegacy(
-    items: Array<{ variantId: string; quantity: number; unitPrice: number }>,
-    branchId: string,
-    userId: string,
-    paymentType: 'QR' | 'EFECTIVO' | 'TARJETA' | 'MIXTO',
-    discountAmount: number,
-    paymentDetails: { efectivo?: number; qr?: number; tarjeta?: number } | undefined,
-    notes: string | undefined,
-    saleChannel: 'TIENDA' | 'WEB',
-    subtotal: number,
-    total: number,
-    saleDateISO: string,
-  ): Promise<Sale> {
-    // Client-side pre-check (best-effort; DB atomic decrement is the real guard)
-    const variantIds = items.map((i) => i.variantId);
-    const { data: stockRows, error: stockBatchError } = await supabase
-      .from('stock')
-      .select('variant_id, quantity')
-      .eq('branch_id', branchId)
-      .in('variant_id', variantIds);
-
-    if (stockBatchError) throw stockBatchError;
-
-    const stockMap = new Map(
-      (stockRows || []).map((r) => [r.variant_id, r.quantity as number])
-    );
-    for (const item of items) {
-      const available = stockMap.get(item.variantId) ?? 0;
-      if (available < item.quantity) {
-        throw new Error('Stock insuficiente para el producto');
-      }
-    }
-
-    const saleData: any = {
-      user_id:         userId,
-      branch_id:       branchId,
-      subtotal,
-      discount_amount: discountAmount,
-      total,
-      sale_date:       saleDateISO,
-      payment_type:    paymentType,
-      sale_channel:    saleChannel,
-    };
-    if (notes && notes.trim())                       saleData.notes = notes.trim();
-    if (paymentType === 'MIXTO' && paymentDetails)   saleData.payment_details = paymentDetails;
-
-    const { data: sale, error: saleError } = await supabase
-      .from('sales')
-      .insert(saleData)
-      .select()
-      .single();
-
-    if (saleError) throw saleError;
-
-    const saleItems = items.map((item) => ({
-      sale_id:    sale.id,
-      variant_id: item.variantId,
-      quantity:   item.quantity,
-      unit_price: item.unitPrice,
-      subtotal:   item.quantity * item.unitPrice,
-    }));
-
-    const { error: itemsError } = await supabase.from('sale_items').insert(saleItems);
-    if (itemsError) throw itemsError;
-
-    for (const item of items) {
-      await this.updateStockAfterSale(item.variantId, branchId, item.quantity);
-    }
-
-    return sale;
-  }
-
-  private async updateStockAfterSale(variantId: string, branchId: string, soldQuantity: number): Promise<void> {
-    // ATOMIC decrement — prevents race conditions between concurrent sales.
-    // The RPC runs: UPDATE stock SET quantity = quantity - N WHERE quantity >= N
-    // returning true if successful, false if stock was insufficient.
-    const { data: result, error: rpcError } = await supabase.rpc('decrement_stock_atomic', {
-      p_variant_id: variantId,
-      p_branch_id: branchId,
-      p_quantity: soldQuantity
-    });
-
-    if (rpcError) {
-      console.error('Error updating stock atomically:', rpcError);
-      throw new Error('Error al actualizar el stock del producto');
-    }
-
-    if (!result) {
-      throw new Error('Stock insuficiente al momento de confirmar la venta');
-    }
   }
 
   async getSalesByBranch(branchId: string): Promise<Sale[]> {
