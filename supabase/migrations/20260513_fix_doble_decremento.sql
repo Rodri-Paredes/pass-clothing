@@ -318,9 +318,55 @@ JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'public'
   AND p.proname IN ('create_sale_atomic', 'decrement_stock_atomic');
 
--- D.3 Probar un decremento seguro manualmente:
--- Reemplazar los UUIDs con valores reales de tu DB antes de ejecutar.
--- DESCOMENTAR solo para prueba en desarrollo/staging.
+-- D.3 Detectar stock con posible corrupción por doble-decremento:
+-- Un producto con stock=0 que tuvo ventas recientes PUEDE haber sido
+-- víctima del doble-decremento. Esta query lo identifica.
+-- RESULTADO: usa la columna "stock_esperado" para guiar la corrección manual.
+SELECT
+  p.name                                     AS producto,
+  pv.size                                    AS talla,
+  b.name                                     AS sucursal,
+  s.quantity                                 AS stock_actual_en_db,
+  COALESCE(ventas.qty_vendida, 0)            AS unidades_vendidas_historicas,
+  COALESCE(stock_inicial.qty_inicial, 0)     AS stock_cargado_por_admin,
+  -- Si stock_actual < (cargado - vendido), hay deuda de doble-decremento
+  COALESCE(stock_inicial.qty_inicial, 0)
+    - COALESCE(ventas.qty_vendida, 0)        AS stock_esperado_correcto,
+  GREATEST(0,
+    (COALESCE(stock_inicial.qty_inicial, 0)
+     - COALESCE(ventas.qty_vendida, 0))
+    - s.quantity
+  )                                          AS unidades_perdidas_por_doble_dec
+FROM stock s
+JOIN product_variants pv ON pv.id = s.variant_id
+JOIN products p          ON p.id  = pv.product_id
+JOIN branches b          ON b.id  = s.branch_id
+-- Total vendido por variante+sucursal en toda la historia
+LEFT JOIN (
+  SELECT si.variant_id, sv.branch_id, SUM(si.quantity) AS qty_vendida
+  FROM sale_items si
+  JOIN sales sv ON sv.id = si.sale_id
+  GROUP BY si.variant_id, sv.branch_id
+) ventas ON ventas.variant_id = s.variant_id AND ventas.branch_id = s.branch_id
+-- Stock cargado manualmente (mayor valor histórico registrado como proxy de stock inicial)
+-- NOTA: esto es una estimación conservadora. Para valores exactos, consultar
+-- los logs de admin o el snapshot de productos si fue creado.
+LEFT JOIN (
+  SELECT variant_id, branch_id, MAX(quantity) AS qty_inicial
+  FROM stock
+  GROUP BY variant_id, branch_id
+) stock_inicial ON stock_inicial.variant_id = s.variant_id AND stock_inicial.branch_id = s.branch_id
+WHERE s.quantity = 0
+  AND COALESCE(ventas.qty_vendida, 0) > 0
+  -- Solo mostrar casos donde el stock debería ser positivo
+  AND (COALESCE(stock_inicial.qty_inicial, 0) - COALESCE(ventas.qty_vendida, 0)) > 0
+ORDER BY unidades_perdidas_por_doble_dec DESC, p.name;
+-- ESPERADO: 0 filas después de aplicar el fix y ajustar stock manualmente.
+-- Si hay filas: corregir con UPDATE stock SET quantity = <stock_esperado_correcto>
+-- WHERE variant_id = '<uuid>' AND branch_id = '<uuid>';
+
+-- D.4 Probar un decremento seguro manualmente:
+-- DESCOMENTAR solo para prueba puntual en staging. NO ejecutar en producción.
 /*
 DO $$
 DECLARE

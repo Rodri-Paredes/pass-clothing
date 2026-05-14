@@ -236,9 +236,10 @@ const SalesPage: React.FC = () => {
       setSaleNotes('');
       setMixedPaymentDetails({ efectivo: 0, qr: 0, tarjeta: 0 });
       setSaleChannel('TIENDA');
-      // Recargar stock después de la venta
+      // Recargar stock ANTES de mostrar el modal para que el grid
+      // refleje el estado real al cerrar la ventana de éxito.
       if (activeBranch) {
-        loadStockByBranch(activeBranch.id);
+        await loadStockByBranch(activeBranch.id);
       }
       setShowSuccessModal(true);
     } catch (error: any) {
@@ -326,7 +327,12 @@ const SalesPage: React.FC = () => {
                 ) : availableProducts.length > 0 ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                     {availableProducts.flatMap((product) =>
-                      (product.variants || []).map((variant: any) => {
+                      (product.variants || []).filter((variant: any) => {
+                        // Solo renderizar variantes con stock > 0 en este POS.
+                        // Evita tarjetas "Stock: 0" clickeables que generan error.
+                        const vs = stock.find(s => s.variant_id === variant.id);
+                        return vs && vs.quantity > 0;
+                      }).map((variant: any) => {
                         const variantStock = stock.find(s => s.variant_id === variant.id);
                         const cartItem = cart.find(item => item.product.id === product.id && item.product.variant_id === variant.id);
                         const discountInfo = activeDiscountsMap.get(product.id);
