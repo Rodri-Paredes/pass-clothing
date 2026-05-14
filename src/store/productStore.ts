@@ -38,7 +38,7 @@ export const useProductStore = create<ProductState>((set, get) => ({
   },
 
   loadStockByBranch: async (branchId: string) => {
-    set({ isLoading: true });
+    set({ isLoading: true, stock: [] }); // Limpiar stock stale para evitar mostrar productos sin stock durante la carga
     try {
       const stock = await productService.getStockByBranch(branchId);
       set({ stock, isLoading: false });

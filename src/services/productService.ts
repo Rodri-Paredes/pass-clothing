@@ -220,6 +220,7 @@ export class ProductService {
         )
       `)
       .eq('branch_id', branchId)
+      .gt('quantity', 0)
       .order('quantity', { ascending: true });
 
     if (error) throw error;
