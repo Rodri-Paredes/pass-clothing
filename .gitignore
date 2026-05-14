@@ -24,3 +24,7 @@ dist-ssr
 *.sln
 *.sw?
 .env
+.env.local
+.env.staging
+.env.production
+scripts/crear_usuarios_iniciales.sql
