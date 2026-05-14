@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, ShoppingCart, Calendar, Search, Package, Minus, CheckCircle, Edit, Percent } from 'lucide-react';
+import { Plus, ShoppingCart, Calendar, Search, Package, Minus, CheckCircle, Edit, Percent, RefreshCw } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Modal from '../components/ui/Modal';
@@ -50,6 +50,7 @@ const SalesPage: React.FC = () => {
   const [filterChannel, setFilterChannel] = useState<string>('');
   // Ref guard: prevents concurrent sale submissions (double-click or rapid retry)
   const isProcessingRef = useRef(false);
+  const [isRefreshingProducts, setIsRefreshingProducts] = useState(false);
 
   useEffect(() => {
     if (activeBranch) {
@@ -57,6 +58,21 @@ const SalesPage: React.FC = () => {
       loadStockByBranch(activeBranch.id);
     }
   }, [activeBranch, loadSalesByBranch, loadStockByBranch]);
+
+  // Recarga manual de productos + stock. Necesario cuando el producto fue
+  // creado en otra página/pestaña después de que SalesPage ya estaba montado.
+  const handleRefreshProducts = async () => {
+    if (!activeBranch || isRefreshingProducts) return;
+    setIsRefreshingProducts(true);
+    try {
+      await Promise.all([
+        loadStockByBranch(activeBranch.id),
+        new Promise<void>((resolve) => { reload(); resolve(); }),
+      ]);
+    } finally {
+      setIsRefreshingProducts(false);
+    }
+  };
 
   // Cargar descuentos activos
   useEffect(() => {
@@ -271,7 +287,17 @@ const SalesPage: React.FC = () => {
         <div className="lg:col-span-2">
           <Card>
             <div className="p-6">
-              <h2 className="text-lg font-semibold mb-4">Seleccionar Productos</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold">Seleccionar Productos</h2>
+                <button
+                  onClick={handleRefreshProducts}
+                  disabled={isRefreshingProducts}
+                  title="Recargar productos y stock"
+                  className="p-1.5 rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors disabled:opacity-40"
+                >
+                  <RefreshCw className={`h-4 w-4 ${isRefreshingProducts ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
               
               {/* Filtros */}
               <div className="flex flex-col md:flex-row gap-4 mb-6">
