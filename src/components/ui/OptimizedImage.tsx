@@ -35,8 +35,8 @@ interface OptimizedImageProps {
 }
 
 /**
- * Transforma una URL de Supabase Storage para optimizarla
- * Añade parámetros de ancho y calidad si es URL de Supabase
+ * Transforma una URL de Supabase Storage para pasarla por images.weserv.nl
+ * CDN gratuito que cachea globalmente y convierte a WebP — elimina egress de Supabase.
  */
 function getOptimizedImageUrl(
   url: string | null | undefined,
@@ -45,23 +45,12 @@ function getOptimizedImageUrl(
 ): string | null {
   if (!url) return null;
 
-  // Si es URL de Supabase Storage, añadir transformaciones
-  if (url.includes('supabase.co/storage')) {
-    const params = new URLSearchParams();
-    
-    if (width) {
-      params.append('width', width.toString());
-    }
-    params.append('quality', quality.toString());
-    
-    // Forzar WebP si el navegador lo soporta
-    params.append('format', 'webp');
-    
-    const separator = url.includes('?') ? '&' : '?';
-    return `${url}${separator}${params.toString()}`;
+  if (url.includes('supabase.co/storage/v1/object/public/')) {
+    const urlSinProtocolo = url.replace(/^https?:\/\//, '');
+    const w = width || 800;
+    return `https://images.weserv.nl/?url=${encodeURIComponent(urlSinProtocolo)}&w=${w}&q=${quality}&output=webp&il`;
   }
 
-  // Si no es de Supabase, devolver tal cual
   return url;
 }
 
