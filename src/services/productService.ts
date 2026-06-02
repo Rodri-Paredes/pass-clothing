@@ -4,9 +4,14 @@ import type { Product, Stock } from '../lib/types';
 
 export class ProductService {
   async createProductVariant(variant: { product_id: string; size: string }): Promise<any> {
+    const normalizedVariant = {
+      ...variant,
+      size: variant.size.trim()
+    };
+
     const { data, error } = await supabase
       .from('product_variants')
-      .insert(variant)
+      .insert(normalizedVariant)
       .select()
       .single();
     if (error) throw error;

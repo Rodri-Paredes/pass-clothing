@@ -149,15 +149,20 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
   const onSubmit = async (data: ProductFormData) => {
     setIsLoading(true);
     try {
+      const normalizedVariants = variants.map((variant) => ({
+        ...variant,
+        size: variant.size.trim()
+      }));
+
       // Validar que todas las variantes tengan talla
-      for (const variant of variants) {
-        if (!variant.size.trim()) {
+      for (const variant of normalizedVariants) {
+        if (!variant.size) {
           throw new Error('Todas las variantes deben tener una talla');
         }
       }
       
       // Validar que el stock sea válido para todas las variantes
-      for (const variant of variants) {
+      for (const variant of normalizedVariants) {
         for (const [branchId, quantity] of Object.entries(variant.stock)) {
           if (quantity < 0) {
             throw new Error(`El stock no puede ser negativo para la talla ${variant.size} en ${branches.find(b => b.id === branchId)?.name}`);
@@ -193,46 +198,47 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
       }
       
       // Create/update variants and stock
-      console.log('Creating/updating variants:', variants);
-      for (const variant of variants) {
+      console.log('Creating/updating variants:', normalizedVariants);
+      for (const variant of normalizedVariants) {
         let variantObj;
+        const size = variant.size;
         
         // Check if this variant already exists (for editing)
         if (product && product.variants && variant.id) {
           // Es una variante existente, usarla directamente
           variantObj = product.variants.find((v: any) => v.id === variant.id);
           if (!variantObj) {
-            console.log('Creating new variant for existing product:', { product_id: savedProduct.id, size: variant.size });
+            console.log('Creating new variant for existing product:', { product_id: savedProduct.id, size });
             variantObj = await createProductVariant({
               product_id: savedProduct.id,
-              size: variant.size
+              size
             });
             console.log('Variant created:', variantObj);
           }
         } else if (product && product.variants) {
           // Buscar si existe una variante con el mismo tamaño
-          const existingVariant = product.variants.find((v: any) => v.size === variant.size);
+          const existingVariant = product.variants.find((v: any) => v.size?.trim() === size);
           if (existingVariant) {
             variantObj = existingVariant;
           } else {
-            console.log('Creating new variant:', { product_id: savedProduct.id, size: variant.size });
+            console.log('Creating new variant:', { product_id: savedProduct.id, size });
             variantObj = await createProductVariant({
               product_id: savedProduct.id,
-              size: variant.size
+              size
             });
             console.log('Variant created:', variantObj);
           }
         } else {
-          console.log('Creating new variant (new product):', { product_id: savedProduct.id, size: variant.size });
+          console.log('Creating new variant (new product):', { product_id: savedProduct.id, size });
           variantObj = await createProductVariant({
             product_id: savedProduct.id,
-            size: variant.size
+            size
           });
           console.log('Variant created (new product):', variantObj);
         }
         
         // Actualizar stock para todas las sucursales
-        console.log(`🔄 [ProductForm] Iniciando actualización de stock para variante: ${variant.size}`);
+        console.log(`🔄 [ProductForm] Iniciando actualización de stock para variante: ${size}`);
         for (const [branchId, quantity] of Object.entries(variant.stock)) {
           console.log(`🔄 [ProductForm] Actualizando stock - Sucursal: ${branchId}, Cantidad: ${quantity}`);
           try {
