@@ -285,19 +285,19 @@ const SalesPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Punto de Venta</h1>
+    <div className="mx-auto max-w-[1680px] space-y-5 px-1 pb-8">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-600">Operación</p><h1 className="text-3xl font-bold tracking-tight text-surface-950">Punto de Venta</h1></div>
         <div className="text-sm text-gray-600">
           {activeBranch ? `Sucursal: ${activeBranch.name}` : 'Sin sucursal'}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
         {/* Panel de productos */}
-        <div className="lg:col-span-2">
-          <Card>
-            <div className="p-6">
+        <div>
+          <Card className="border-surface-200 shadow-sm">
+            <div className="p-4 sm:p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold">Seleccionar Productos</h2>
                 <button
@@ -346,9 +346,9 @@ const SalesPage: React.FC = () => {
               )}
 
               {/* Grid de productos con contenedor estable */}
-              <div className="max-h-96 overflow-y-auto">
+              <div className="max-h-[calc(100vh-250px)] min-h-[420px] overflow-y-auto pr-1">
                 {isInitialLoading ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
                     {Array.from({ length: 6 }).map((_, i) => (
                       <div key={i} className="border border-gray-200 rounded-xl p-4 bg-white">
                         <div className="aspect-square rounded-lg mb-3 animate-pulse bg-gray-200" />
@@ -467,9 +467,9 @@ const SalesPage: React.FC = () => {
         </div>
 
         {/* Panel del carrito mejorado visualmente */}
-        <div className="lg:col-span-1">
-          <Card className="sticky top-6 shadow-xl border-0 bg-gradient-to-br from-blue-50 to-indigo-100">
-            <div className="p-6">
+        <div className="xl:sticky xl:top-4">
+          <Card className="max-h-[calc(100vh-2rem)] overflow-y-auto border-surface-200 bg-white shadow-xl">
+            <div className="p-4 sm:p-5">
               <h3 className="text-xl font-bold mb-6 text-blue-900 flex items-center gap-2">
                 <ShoppingCart className="h-6 w-6 text-blue-500" /> Carrito de Venta
               </h3>
