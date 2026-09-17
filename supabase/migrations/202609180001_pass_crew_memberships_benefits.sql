@@ -145,7 +145,11 @@ CREATE INDEX sale_benefit_customer_idx ON public.sale_benefit_redemptions(custom
 
 CREATE FUNCTION public.crew_set_updated_at() RETURNS trigger
 LANGUAGE plpgsql SET search_path = public AS $$
-BEGIN NEW.updated_at = now(); RETURN NEW; END
+BEGIN
+  NEW.updated_at = now();
+  IF TG_TABLE_NAME = 'crew_settings' THEN NEW.updated_by = auth.uid(); END IF;
+  RETURN NEW;
+END
 $$;
 CREATE TRIGGER crew_plans_updated_at BEFORE UPDATE ON public.crew_plans FOR EACH ROW EXECUTE FUNCTION public.crew_set_updated_at();
 CREATE TRIGGER crew_settings_updated_at BEFORE UPDATE ON public.crew_settings FOR EACH ROW EXECUTE FUNCTION public.crew_set_updated_at();
@@ -294,6 +298,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE v_request public.crew_membership_requests%ROWTYPE;
 BEGIN
   IF NOT public.crew_is_admin() THEN RAISE EXCEPTION 'Solo administradores pueden rechazar solicitudes'; END IF;
+  IF length(COALESCE(p_reason, '')) > 500 THEN RAISE EXCEPTION 'El motivo no puede superar 500 caracteres'; END IF;
   SELECT * INTO v_request FROM public.crew_membership_requests WHERE id = p_request_id FOR UPDATE;
   IF NOT FOUND OR v_request.status <> 'pending' THEN RAISE EXCEPTION 'Solicitud pendiente no encontrada'; END IF;
   UPDATE public.crew_membership_requests SET status = 'rejected', reviewed_by = auth.uid(), reviewed_at = now(), rejection_reason = nullif(trim(p_reason), '') WHERE id = p_request_id;
@@ -336,9 +341,10 @@ DECLARE v_catalog_subtotal numeric := 0; v_requested_subtotal numeric := 0; v_pr
   v_item jsonb; v_variant uuid; v_qty integer; v_requested_price numeric; v_product public.products%ROWTYPE; v_membership public.crew_memberships%ROWTYPE;
   v_benefit public.crew_benefit_definitions%ROWTYPE; v_candidate public.crew_benefit_definitions%ROWTYPE; v_candidate_amount numeric; v_best_amount numeric := 0;
   v_source text := 'none'; v_effective_items jsonb; v_sale_discount numeric := 0; v_snapshot jsonb := NULL;
-  v_has_membership boolean := false; v_eligible_subtotal numeric := 0; v_rule_value numeric := 0;
+  v_has_membership boolean := false; v_is_staff boolean := false; v_eligible_subtotal numeric := 0; v_rule_value numeric := 0;
 BEGIN
-  IF NOT public.crew_is_staff() THEN RAISE EXCEPTION 'No autorizado'; END IF;
+  v_is_staff := public.crew_is_staff();
+  IF NOT v_is_staff AND (p_customer_id IS NULL OR NOT public.crew_owns_customer(p_customer_id)) THEN RAISE EXCEPTION 'No autorizado'; END IF;
   IF jsonb_typeof(p_items) <> 'array' OR jsonb_array_length(p_items) = 0 THEN RAISE EXCEPTION 'La venta requiere ítems'; END IF;
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_items) LOOP
     v_variant := (v_item->>'variantId')::uuid; v_qty := (v_item->>'quantity')::integer; v_requested_price := (v_item->>'unitPrice')::numeric;
@@ -349,7 +355,7 @@ BEGIN
     v_requested_subtotal := v_requested_subtotal + v_requested_price * v_qty;
   END LOOP;
   v_promo_saving := GREATEST(0, v_catalog_subtotal - v_requested_subtotal);
-  v_manual_saving := LEAST(GREATEST(COALESCE(p_manual_discount, 0), 0), v_catalog_subtotal);
+  v_manual_saving := CASE WHEN v_is_staff THEN LEAST(GREATEST(COALESCE(p_manual_discount, 0), 0), v_catalog_subtotal) ELSE 0 END;
   PERFORM public.crew_refresh_membership_statuses();
   IF p_customer_id IS NOT NULL THEN
     SELECT * INTO v_membership FROM public.crew_memberships WHERE customer_id = p_customer_id AND status = 'active' AND started_at <= now() AND expires_at > now() ORDER BY expires_at DESC LIMIT 1;

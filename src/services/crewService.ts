@@ -38,6 +38,11 @@ export const crewService = {
     const { data, error } = await supabase.from('crew_benefit_definitions').insert(input).select().single(); fail(error);
     if (planIds.length) { const { error: linkError } = await supabase.from('crew_plan_benefits').insert(planIds.map(plan_id => ({ plan_id, benefit_id: data.id }))); fail(linkError); }
   },
+  async saveBenefit(input: CrewBenefitDefinition, planIds: string[]) {
+    const { error } = await supabase.from('crew_benefit_definitions').update({ name: input.name, description: input.description || null, rule: input.rule, is_active: input.is_active, is_public: input.is_public }).eq('id', input.id); fail(error);
+    const { error: deleteError } = await supabase.from('crew_plan_benefits').delete().eq('benefit_id', input.id); fail(deleteError);
+    if (planIds.length) { const { error: linkError } = await supabase.from('crew_plan_benefits').insert(planIds.map(plan_id => ({ plan_id, benefit_id: input.id }))); fail(linkError); }
+  },
   async saveSettings(paymentInstructions: string | null, paymentQrPath: string | null) { const { error } = await supabase.from('crew_settings').update({ payment_instructions: paymentInstructions, payment_qr_path: paymentQrPath }).eq('id', 1); fail(error); },
   async uploadQr(file: File) { const extension = file.name.split('.').pop()?.toLowerCase() || 'png'; const path = `payment/crew-qr-${Date.now()}.${extension}`; const { error } = await supabase.storage.from('crew-assets').upload(path, file, { upsert: false }); fail(error); return path; },
   async context(customerId: string) { const { data, error } = await supabase.rpc('get_customer_crew_context', { p_customer_id: customerId }); fail(error); return data as CrewContext; },
