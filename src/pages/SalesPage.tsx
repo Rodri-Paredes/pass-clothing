@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, ShoppingCart, Calendar, Search, Package, Minus, CheckCircle, Edit, Percent, RefreshCw } from 'lucide-react';
+import { ShoppingCart, Calendar, Search, Package, CheckCircle, Edit, RefreshCw } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Modal from '../components/ui/Modal';
@@ -13,16 +13,11 @@ import { useDiscountStore } from '../store/discountStore';
 import { useToastStore } from '../store/toastStore';
 import { CATEGORIES, SALE_CHANNELS } from '../lib/constants';
 import { usePaginatedProducts } from '../hooks/usePaginatedProducts';
-import { fmtMoney, fmtMoneyRaw, fmtQty } from '../lib/formatters';
-import CustomerSelector from '../components/customers/CustomerSelector';
+import { fmtMoney, fmtMoneyRaw } from '../lib/formatters';
 import CreateCustomerModal from '../components/customers/CreateCustomerModal';
-import type { Customer } from '../lib/types';
-
-interface CartItem {
-  product: any;
-  quantity: number;
-  availableStock: number;
-}
+import PosProductGrid from '../components/sales/PosProductGrid';
+import PosCheckoutPanel, { type PosCartItem } from '../components/sales/PosCheckoutPanel';
+import type { Customer, Product, ProductVariant, Sale } from '../lib/types';
 
 const SalesPage: React.FC = () => {
   const { sales, loadSalesByBranch, createSale, updatePaymentMethod } = useSalesStore();
@@ -32,13 +27,13 @@ const SalesPage: React.FC = () => {
   const addToast = useToastStore((s) => s.addToast);
   const notify = useToastStore((s) => s.notify);
   const [showSalesForm, setShowSalesForm] = useState(false);
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [cart, setCart] = useState<PosCartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [isProcessingSale, setIsProcessingSale] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [paymentType, setPaymentType] = useState<'QR' | 'EFECTIVO' | 'TARJETA' | 'MIXTO'>('EFECTIVO');
-  const [selectedSale, setSelectedSale] = useState<any | null>(null);
+  const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [discountAmount, setDiscountAmount] = useState<number>(0);
   const [saleNotes, setSaleNotes] = useState<string>('');
   /* removed unused state: showMixedPaymentModal */
@@ -48,7 +43,7 @@ const SalesPage: React.FC = () => {
     tarjeta: 0
   });
   const [editPaymentModalOpen, setEditPaymentModalOpen] = useState(false);
-  const [saleToEdit, setSaleToEdit] = useState<any | null>(null);
+  const [saleToEdit, setSaleToEdit] = useState<Sale | null>(null);
   const [saleChannel, setSaleChannel] = useState<'TIENDA' | 'WEB'>('TIENDA');
   const [filterChannel, setFilterChannel] = useState<string>('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -116,7 +111,7 @@ const SalesPage: React.FC = () => {
   // Adapt availableProducts to filter by variants with stock
   const availableProducts = useMemo(() => {
     return items.filter(product => {
-      const hasVariantWithStock = (product.variants || []).some((variant: any) => {
+      const hasVariantWithStock = (product.variants || []).some((variant: ProductVariant) => {
         const variantStock = stock.find(s => s.variant_id === variant.id);
         return variantStock && variantStock.quantity > 0;
       });
@@ -134,7 +129,7 @@ const SalesPage: React.FC = () => {
     return originalPrice;
   };
 
-  const handleAddToCart = (product: any) => {
+  const handleAddToCart = (product: Product & { variant_id: string; size: string }) => {
     // product must have variant_id
     const variantStock = stock.find(s => s.variant_id === product.variant_id);
     if (!variantStock || variantStock.quantity === 0) {
@@ -269,9 +264,9 @@ const SalesPage: React.FC = () => {
         await loadStockByBranch(activeBranch.id);
       }
       setShowSuccessModal(true);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error processing sale:', error);
-        const msg = error?.message || 'Error desconocido al procesar la venta';
+        const msg = error instanceof Error ? error.message : 'Error desconocido al procesar la venta';
       const isStockError = msg.toLowerCase().includes('stock');
       notify(
         isStockError ? 'stock_insufficient' : 'sale_failed',
@@ -285,7 +280,7 @@ const SalesPage: React.FC = () => {
   };
 
   return (
-    <div className="mx-auto max-w-[1680px] space-y-5 px-1 pb-8">
+    <div className="mx-auto max-w-[1680px] space-y-5 px-1 pb-24 xl:pb-8">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
         <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-600">Operación</p><h1 className="text-3xl font-bold tracking-tight text-surface-950">Punto de Venta</h1></div>
         <div className="text-sm text-gray-600">
@@ -362,81 +357,8 @@ const SalesPage: React.FC = () => {
                     ))}
                   </div>
                 ) : availableProducts.length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                    {availableProducts.flatMap((product) =>
-                      (product.variants || []).filter((variant: any) => {
-                        // Solo renderizar variantes con stock > 0 en este POS.
-                        // Evita tarjetas "Stock: 0" clickeables que generan error.
-                        const vs = stock.find(s => s.variant_id === variant.id);
-                        return vs && vs.quantity > 0;
-                      }).map((variant: any) => {
-                        const variantStock = stock.find(s => s.variant_id === variant.id);
-                        const cartItem = cart.find(item => item.product.id === product.id && item.product.variant_id === variant.id);
-                        const discountInfo = activeDiscountsMap.get(product.id);
-                        const hasDiscount = !!discountInfo;
-                        const finalPrice = hasDiscount ? getDiscountedPrice(product.id, product.price) : product.price;
-                        
-                        return (
-                          <div
-                            key={variant.id}
-                            className="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow cursor-pointer bg-white relative"
-                            onClick={() => handleAddToCart({ ...product, variant_id: variant.id, size: variant.size, price: product.price })}
-                          >
-                            {/* Badge de descuento */}
-                            {hasDiscount && (
-                              <div className="absolute top-2 right-2 z-10">
-                                <div className="bg-red-500 text-white px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1 shadow-lg">
-                                  <Percent className="h-3 w-3" />
-                                  -{discountInfo.percentage}%
-                                </div>
-                              </div>
-                            )}
-                            
-                            <div className="aspect-square bg-gray-100 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
-                              {product.image_url ? (
-                                <img
-                                  src={product.image_url}
-                                  alt={product.name}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <Package className="w-8 h-8 text-gray-400" />
-                              )}
-                            </div>
-                            <h3 className="font-semibold text-gray-900 text-sm mb-1 truncate">
-                              {product.name}
-                            </h3>
-                            <p className="text-xs text-gray-600 mb-2">{product.category} - Talla: {variant.size}</p>
-                            <div className="flex justify-between items-center">
-                              <div className="flex flex-col">
-                                {hasDiscount ? (
-                                  <>
-                                    <span className="text-xs text-gray-400 line-through">
-                                      Bs. {fmtMoneyRaw(product.price)}
-                                    </span>
-                                    <span className="font-bold text-green-600">
-                                      Bs. {fmtMoneyRaw(finalPrice)}
-                                    </span>
-                                  </>
-                                ) : (
-                                  <span className="font-bold text-blue-600">
-                                      Bs. {fmtMoneyRaw(product.price)}
-                                  </span>
-                                )}
-                              </div>
-                              <span className="text-xs text-gray-500">
-                                Stock: {variantStock?.quantity || 0}
-                              </span>
-                            </div>
-                            {cartItem && (
-                              <div className="mt-2 text-xs text-green-600 font-medium">
-                                En carrito: {cartItem.quantity}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })
-                    )}
+                  <div>
+                    <PosProductGrid products={availableProducts} stock={stock} onAdd={handleAddToCart} getDisplayPrice={getDiscountedPrice} cartQuantity={(productId, variantId) => cart.find(item => item.product.id === productId && item.product.variant_id === variantId)?.quantity || 0} />
                     {/* Sentinel dentro del grid para evitar saltos visuales */}
                     {hasMore && (
                       <div className="col-span-full"><div ref={(el) => el && observerRef(el)} className="h-4" /></div>
@@ -466,360 +388,30 @@ const SalesPage: React.FC = () => {
           </Card>
         </div>
 
-        {/* Panel del carrito mejorado visualmente */}
-        <div className="xl:sticky xl:top-4">
-          <Card className="max-h-[calc(100vh-2rem)] overflow-y-auto border-surface-200 bg-white shadow-xl">
-            <div className="p-4 sm:p-5">
-              <h3 className="text-xl font-bold mb-6 text-blue-900 flex items-center gap-2">
-                <ShoppingCart className="h-6 w-6 text-blue-500" /> Carrito de Venta
-              </h3>
-              <div className="mb-5">
-                <p className="mb-2 text-sm font-semibold text-gray-700">Cliente <span className="font-normal text-gray-400">(opcional)</span></p>
-                <CustomerSelector value={selectedCustomer} onChange={setSelectedCustomer} onCreate={() => setCreateCustomerOpen(true)} />
-              </div>
-              {cart.length === 0 ? (
-                <div className="text-center py-8 text-gray-400">
-                  <ShoppingCart className="h-14 w-14 mx-auto mb-4 opacity-40" />
-                  <p className="font-semibold">Carrito vacío</p>
-                  <p className="text-sm">Selecciona productos para agregar</p>
-                </div>
-              ) : (
-                <>
-                  <div className="space-y-4 mb-6 max-h-72 overflow-y-auto pr-1">
-                    {cart.map((item) => {
-                      const hasDiscount = item.product.originalPrice && item.product.finalPrice && item.product.originalPrice !== item.product.finalPrice;
-                      const priceToShow = item.product.finalPrice || item.product.price;
-                      
-                      return (
-                        <div key={`${item.product.id}-${item.product.variant_id}`} className="flex items-center justify-between bg-white rounded-xl shadow p-4 border border-gray-100 hover:shadow-lg transition-shadow">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center relative">
-                              {item.product.image_url ? (
-                                <img src={item.product.image_url} alt={item.product.name} className="w-10 h-10 object-cover rounded-full" />
-                              ) : (
-                                <Package className="h-6 w-6 text-gray-400" />
-                              )}
-                              {hasDiscount && (
-                                <div className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5">
-                                  <Percent className="h-2.5 w-2.5 text-white" />
-                                </div>
-                              )}
-                            </div>
-                            <div className="min-w-0">
-                              <h4 className="font-semibold text-gray-900 text-base truncate">{item.product.name}</h4>
-                              <div className="flex flex-col">
-                                {hasDiscount ? (
-                                  <>
-                                    <span className="text-xs text-gray-400 line-through">Bs. {fmtMoneyRaw(item.product.originalPrice)} c/u</span>
-                                    <span className="text-xs text-green-600 font-medium">Bs. {fmtMoneyRaw(priceToShow)} c/u (con descuento)</span>
-                                  </>
-                                ) : (
-                                  <span className="text-xs text-gray-500">Bs. {fmtMoneyRaw(priceToShow)} c/u</span>
-                                )}
-                              </div>
-                              <p className="text-xs text-gray-400">Stock: {item.availableStock}</p>
-                            </div>
-                          </div>
-                          <div className="flex flex-col items-end gap-2">
-                            <div className="flex items-center gap-2">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleQuantityChange(item.product.id, item.product.variant_id, item.quantity - 1)}
-                                className="h-8 w-8 p-0 border border-gray-200"
-                              >
-                                <Minus className="h-4 w-4" />
-                              </Button>
-                              <span className="w-10 text-center text-base font-bold bg-gray-50 rounded px-2 border border-gray-200">
-                                {item.quantity}
-                              </span>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleQuantityChange(item.product.id, item.product.variant_id, item.quantity + 1)}
-                                disabled={item.quantity >= item.availableStock}
-                                className="h-8 w-8 p-0 border border-gray-200"
-                              >
-                                <Plus className="h-4 w-4" />
-                              </Button>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-gray-500">Subtotal:</span>
-                              <span className={`font-semibold text-base ${hasDiscount ? 'text-green-600' : 'text-blue-700'}`}>
-                                Bs. {fmtMoneyRaw(item.quantity * priceToShow)}
-                              </span>
-                            </div>
-                            <Button
-                              size="sm"
-                              variant="danger"
-                              onClick={() => handleRemoveFromCart(item.product.id, item.product.variant_id)}
-                              className="w-full mt-1"
-                            >
-                              Quitar
-                            </Button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div className="border-t border-gray-200 pt-4">
-                    {/* Sección de descuentos */}
-                    <div className="mb-6">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-base font-semibold text-gray-700">Descuento:</span>
-                        <span className="text-xs text-gray-400">(Opcional)</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-gray-600">Bs.</span>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={discountAmount}
-                          onChange={(e) => setDiscountAmount(Math.max(0, parseFloat(e.target.value) || 0))}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          placeholder="0.00"
-                        />
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => setDiscountAmount(0)}
-                          disabled={discountAmount === 0}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          Limpiar
-                        </Button>
-                      </div>
-                    </div>
-
-                    {/* Sección de notas/descripción */}
-                    <div className="mb-6">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-base font-semibold text-gray-700">Descripción:</span>
-                        <span className="text-xs text-gray-400">(Opcional - ej: giftcard, venta especial)</span>
-                      </div>
-                      <textarea
-                        value={saleNotes}
-                        onChange={(e) => setSaleNotes(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Ej: Giftcard $100, Pedido especial Juan, etc."
-                        rows={2}
-                        maxLength={200}
-                      />
-                      <div className="text-xs text-gray-400 mt-1 text-right">
-                        {saleNotes.length}/200 caracteres
-                      </div>
-                    </div>
-
-                    {/* Selector de tipo de pago mejorado */}
-                    <div className="mb-6">
-                      <div className="flex items-center gap-3 mb-2">
-                        <span className="text-base font-semibold text-gray-700">Selecciona el tipo de pago:</span>
-                        <span className="text-xs text-gray-400">(Obligatorio)</span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <button
-                          type="button"
-                          className={`flex flex-col items-center justify-center p-3 rounded-lg border-2 transition-all shadow-sm cursor-pointer
-                            ${paymentType === 'EFECTIVO' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-white'} hover:border-green-400`}
-                          onClick={() => setPaymentType('EFECTIVO')}
-                        >
-                          <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="text-green-600 mb-1">
-                            <rect x="3" y="7" width="18" height="10" rx="2" strokeWidth="2" />
-                            <circle cx="12" cy="12" r="2" strokeWidth="2" />
-                          </svg>
-                          <span className="font-semibold text-green-700 text-sm">Efectivo</span>
-                        </button>
-                        <button
-                          type="button"
-                          className={`flex flex-col items-center justify-center p-3 rounded-lg border-2 transition-all shadow-sm cursor-pointer
-                            ${paymentType === 'QR' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 bg-white'} hover:border-indigo-400`}
-                          onClick={() => setPaymentType('QR')}
-                        >
-                          <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="text-indigo-600 mb-1">
-                            <rect x="4" y="4" width="16" height="16" rx="2" strokeWidth="2" />
-                            <path d="M8 8h.01M16 8h.01M8 16h.01M16 16h.01" strokeWidth="2" />
-                          </svg>
-                          <span className="font-semibold text-indigo-700 text-sm">QR</span>
-                        </button>
-                        <button
-                          type="button"
-                          className={`flex flex-col items-center justify-center p-3 rounded-lg border-2 transition-all shadow-sm cursor-pointer
-                            ${paymentType === 'TARJETA' ? 'border-pink-500 bg-pink-50' : 'border-gray-200 bg-white'} hover:border-pink-400`}
-                          onClick={() => setPaymentType('TARJETA')}
-                        >
-                          <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="text-pink-600 mb-1">
-                            <rect x="2" y="6" width="20" height="12" rx="2" strokeWidth="2" />
-                            <rect x="6" y="10" width="12" height="2" rx="1" strokeWidth="2" />
-                          </svg>
-                          <span className="font-semibold text-pink-700 text-sm">Tarjeta</span>
-                        </button>
-                        <button
-                          type="button"
-                          className={`flex flex-col items-center justify-center p-3 rounded-lg border-2 transition-all shadow-sm cursor-pointer
-                            ${paymentType === 'MIXTO' ? 'border-purple-500 bg-purple-50' : 'border-gray-200 bg-white'} hover:border-purple-400`}
-                          onClick={() => setPaymentType('MIXTO')}
-                        >
-                          <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="text-purple-600 mb-1">
-                            <path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" strokeWidth="2" />
-                          </svg>
-                          <span className="font-semibold text-purple-700 text-sm">Mixto</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Configuración de pago mixto */}
-                    {paymentType === 'MIXTO' && (
-                      <div className="mb-6 p-4 bg-purple-50 rounded-lg border border-purple-200">
-                        <h4 className="font-semibold text-purple-800 mb-3">Configurar Pago Mixto</h4>
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-purple-700 w-16">Efectivo:</span>
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={mixedPaymentDetails.efectivo}
-                              onChange={(e) => setMixedPaymentDetails(prev => ({
-                                ...prev,
-                                efectivo: Math.max(0, parseFloat(e.target.value) || 0)
-                              }))}
-                              className="flex-1 px-2 py-1 border border-purple-300 rounded text-sm focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
-                              placeholder="0.00"
-                            />
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-purple-700 w-16">QR:</span>
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={mixedPaymentDetails.qr}
-                              onChange={(e) => setMixedPaymentDetails(prev => ({
-                                ...prev,
-                                qr: Math.max(0, parseFloat(e.target.value) || 0)
-                              }))}
-                              className="flex-1 px-2 py-1 border border-purple-300 rounded text-sm focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
-                              placeholder="0.00"
-                            />
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-purple-700 w-16">Tarjeta:</span>
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={mixedPaymentDetails.tarjeta}
-                              onChange={(e) => setMixedPaymentDetails(prev => ({
-                                ...prev,
-                                tarjeta: Math.max(0, parseFloat(e.target.value) || 0)
-                              }))}
-                              className="flex-1 px-2 py-1 border border-purple-300 rounded text-sm focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
-                              placeholder="0.00"
-                            />
-                          </div>
-                          <div className="pt-2 border-t border-purple-200">
-                            <div className="flex justify-between text-sm">
-                              <span className="font-medium text-purple-700">Total ingresado:</span>
-                              <span className="font-bold text-purple-800">
-                                Bs. {fmtMoneyRaw(mixedPaymentDetails.efectivo + mixedPaymentDetails.qr + mixedPaymentDetails.tarjeta)}
-                              </span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                              <span className="font-medium text-purple-700">Total a pagar:</span>
-                              <span className="font-bold text-purple-800">Bs. {fmtMoneyRaw(getTotalAmount())}</span>
-                            </div>
-                            {(mixedPaymentDetails.efectivo + mixedPaymentDetails.qr + mixedPaymentDetails.tarjeta) !== getTotalAmount() && (
-                              <div className="text-xs text-red-600 mt-1">
-                                ⚠️ Los montos deben sumar exactamente el total a pagar
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Selector de canal de venta */}
-                    <div className="mb-6">
-                      <div className="flex items-center gap-3 mb-2">
-                        <span className="text-base font-semibold text-gray-700">Canal de venta:</span>
-                        <span className="text-xs text-gray-400">(¿Dónde se realizó la venta?)</span>
-                      </div>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                        {SALE_CHANNELS.map((channel) => (
-                          <button
-                            key={channel.value}
-                            type="button"
-                            className={`flex items-center justify-center gap-2 p-2.5 rounded-lg border-2 transition-all shadow-sm cursor-pointer text-sm
-                              ${saleChannel === channel.value 
-                                ? `border-${channel.color}-500 bg-${channel.color}-50` 
-                                : 'border-gray-200 bg-white'} hover:border-${channel.color}-400`}
-                            onClick={() => setSaleChannel(channel.value as any)}
-                          >
-                            <span className="text-lg">{channel.icon}</span>
-                            <span className="font-semibold">{channel.label}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Total y acciones */}
-                    <div className="flex flex-col gap-4">
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-sm text-gray-600">
-                          <span>Subtotal:</span>
-                          <span>Bs. {fmtMoneyRaw(getSubtotal())}</span>
-                        </div>
-                        {getTotalDiscountFromProducts() > 0 && (
-                          <div className="flex justify-between text-sm text-green-600 font-medium">
-                            <span className="flex items-center gap-1">
-                              <Percent className="h-3 w-3" />
-                              Descuentos aplicados:
-                            </span>
-                            <span>- Bs. {fmtMoneyRaw(getTotalDiscountFromProducts())}</span>
-                          </div>
-                        )}
-                        {discountAmount > 0 && (
-                          <div className="flex justify-between text-sm text-orange-600">
-                            <span>Descuento adicional:</span>
-                            <span>- Bs. {fmtMoneyRaw(discountAmount)}</span>
-                          </div>
-                        )}
-                        <div className="flex items-center justify-between bg-gradient-to-r from-blue-100 to-indigo-100 rounded-lg px-4 py-3">
-                          <span className="text-lg font-bold text-gray-900">Total a pagar:</span>
-                          <span className="text-3xl font-extrabold text-blue-700 drop-shadow">Bs. {fmtMoneyRaw(getTotalAmount())}</span>
-                        </div>
-                      </div>
-                      <Button
-                        onClick={handleProcessSale}
-                        isLoading={isProcessingSale}
-                        className="w-full bg-gradient-to-r from-green-500 to-blue-600 hover:from-green-600 hover:to-blue-700 shadow-xl text-lg font-bold py-3 text-white border-none"
-                        disabled={cart.length === 0 || (paymentType === 'MIXTO' && (mixedPaymentDetails.efectivo + mixedPaymentDetails.qr + mixedPaymentDetails.tarjeta) !== getTotalAmount())}
-                      >
-                        <span className="flex items-center gap-2 justify-center">
-                          <CheckCircle className="h-6 w-6" /> Procesar Venta
-                        </span>
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        onClick={() => {
-                          setCart([]);
-                          setDiscountAmount(0);
-                          setMixedPaymentDetails({ efectivo: 0, qr: 0, tarjeta: 0 });
-                        }}
-                        className="w-full border border-gray-200 text-gray-700"
-                        disabled={cart.length === 0}
-                      >
-                        Limpiar Carrito
-                      </Button>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          </Card>
-        </div>
+        <PosCheckoutPanel
+          cart={cart}
+          customer={selectedCustomer}
+          onCustomerChange={setSelectedCustomer}
+          onCreateCustomer={() => setCreateCustomerOpen(true)}
+          onQuantityChange={handleQuantityChange}
+          onRemove={handleRemoveFromCart}
+          discountAmount={discountAmount}
+          onDiscountChange={setDiscountAmount}
+          productDiscount={getTotalDiscountFromProducts()}
+          subtotal={getSubtotal()}
+          total={getTotalAmount()}
+          paymentType={paymentType}
+          onPaymentTypeChange={setPaymentType}
+          mixedPayment={mixedPaymentDetails}
+          onMixedPaymentChange={setMixedPaymentDetails}
+          notes={saleNotes}
+          onNotesChange={setSaleNotes}
+          channel={saleChannel}
+          onChannelChange={setSaleChannel}
+          isProcessing={isProcessingSale}
+          onCheckout={handleProcessSale}
+          onClear={() => { setCart([]); setDiscountAmount(0); setMixedPaymentDetails({ efectivo: 0, qr: 0, tarjeta: 0 }); setPaymentType('EFECTIVO'); setSaleNotes(''); setSaleChannel('TIENDA'); setSelectedCustomer(null); clientRequestIdRef.current = null; }}
+        />
       </div>
 
       {/* Historial de ventas */}
@@ -961,7 +553,7 @@ const SalesPage: React.FC = () => {
             <div>
               <span className="font-semibold text-gray-700 text-base md:text-lg">Artículos</span>
               <ul className="mt-3 space-y-3 md:space-y-4 max-h-64 md:max-h-80 overflow-y-auto pr-1">
-                {selectedSale.sale_items?.map((item: any, idx: number) => (
+                {selectedSale.sale_items?.map((item, idx: number) => (
                   <li key={idx} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 md:px-4 md:py-3 text-sm md:text-base shadow">
                     <span className="font-medium text-gray-900 truncate">
                       {item.variant?.product?.name || '-'}
