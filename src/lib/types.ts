@@ -24,10 +24,16 @@ export interface Product {
   image_url?: string;
   is_visible: boolean;
   drop_id?: string;
+  color?: string | null;
+  fit?: ProductFit | null;
+  product_style?: ProductStyle | null;
   created_at: string;
   variants?: ProductVariant[];
   drop?: Drop;
 }
+
+export type ProductFit = 'Oversize' | 'Regular' | 'Boxy' | 'Slim';
+export type ProductStyle = 'Básico' | 'Estampado' | 'Bordado' | 'Serigrafía' | 'Otro';
 
 export interface ProductVariant {
   id: string;

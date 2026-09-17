@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase';
 import type { SalesUnitsBreakdown } from '../lib/types';
 
 export const salesStatisticsService = {
-  async unitsBreakdown(dimension: 'category' | 'size', startAt: string, endAt: string, branchId?: string, topN = 10): Promise<SalesUnitsBreakdown[]> {
+  async unitsBreakdown(dimension: 'category' | 'size' | 'color' | 'fit' | 'style', startAt: string, endAt: string, branchId?: string, topN = 10): Promise<SalesUnitsBreakdown[]> {
     const { data, error } = await supabase.rpc('sales_units_breakdown', {
       p_dimension: dimension, p_start_at: startAt, p_end_at: endAt, p_branch_id: branchId || null, p_top_n: topN,
     });

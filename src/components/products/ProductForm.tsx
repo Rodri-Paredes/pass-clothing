@@ -6,12 +6,15 @@ import Button from '../ui/Button';
 import { useProductStore } from '../../store/productStore';
 import { useAuthStore } from '../../store/authStore';
 import { dropsService } from '../../services/dropsService';
-import type { Drop } from '../../lib/types';
+import type { Drop, ProductFit, ProductStyle } from '../../lib/types';
 
 interface ProductFormData {
   name: string;
   description: string;
   category: string;
+  color?: string;
+  fit?: ProductFit;
+  product_style?: ProductStyle;
   price: number;
   is_visible: boolean;
   drop_id?: string;
@@ -44,6 +47,9 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
       name: product.name,
       description: product.description,
       category: product.category,
+      color: product.color || '',
+      fit: product.fit || undefined,
+      product_style: product.product_style || undefined,
       price: product.price ?? 0,
       is_visible: product.is_visible ?? true,
       drop_id: product.drop_id || '',
@@ -183,6 +189,9 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
         name: data.name,
         description: data.description,
         category: data.category,
+        color: data.color || undefined,
+        fit: data.fit || undefined,
+        product_style: data.product_style || undefined,
         image_url: imageUrl,
         price: data.price,
         is_visible: data.is_visible,
@@ -353,6 +362,32 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
             {errors.category && (
               <p className="text-sm text-red-600 mt-1">{errors.category.message}</p>
             )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Color</label>
+            <select {...register('color')} className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+              <option value="">Sin especificar</option>
+              <option value="Negro">Negro</option><option value="Blanco">Blanco</option><option value="Gris">Gris</option><option value="Beige">Beige</option>
+              <option value="Azul">Azul</option><option value="Rojo">Rojo</option><option value="Verde">Verde</option><option value="Rosa">Rosa</option>
+              <option value="Marrón">Marrón</option><option value="Amarillo">Amarillo</option><option value="Morado">Morado</option><option value="Multicolor">Multicolor</option><option value="Otro">Otro</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Fit</label>
+            <select {...register('fit')} className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+              <option value="">Sin especificar</option>
+              <option value="Oversize">Oversize</option><option value="Regular">Regular</option><option value="Boxy">Boxy</option><option value="Slim">Slim</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Tipo / estilo</label>
+            <select {...register('product_style')} className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+              <option value="">Sin especificar</option>
+              <option value="Básico">Básico</option><option value="Estampado">Estampado</option><option value="Bordado">Bordado</option><option value="Serigrafía">Serigrafía</option><option value="Otro">Otro</option>
+            </select>
           </div>
         </div>
 
