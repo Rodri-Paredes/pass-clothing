@@ -275,11 +275,15 @@ BEGIN
       -- La vista no se resuelve estáticamente: así la RPC sigue dando un error
       -- explícito si un entorno antiguo no tiene el módulo de descuentos.
       IF to_regclass('public.products_with_active_discount') IS NOT NULL THEN
-        EXECUTE 'SELECT EXISTS (SELECT 1 FROM public.products_with_active_discount d WHERE d.product_id = $1 AND abs(d.discounted_price - $2) <= 0.01)'
-          INTO v_price_authorized USING v_product_id, v_requested_price;
+        EXECUTE format(
+          'SELECT EXISTS (SELECT 1 FROM public.products_with_active_discount d WHERE d.product_id = %L::uuid AND abs(d.discounted_price - %L::numeric) <= 0.01)',
+          v_product_id, v_requested_price
+        ) INTO v_price_authorized;
         IF v_price_authorized THEN
-          EXECUTE 'SELECT d.discounted_price FROM public.products_with_active_discount d WHERE d.product_id = $1 AND abs(d.discounted_price - $2) <= 0.01 ORDER BY d.discounted_price LIMIT 1'
-            INTO v_price USING v_product_id, v_requested_price;
+          EXECUTE format(
+            'SELECT d.discounted_price FROM public.products_with_active_discount d WHERE d.product_id = %L::uuid AND abs(d.discounted_price - %L::numeric) <= 0.01 ORDER BY d.discounted_price LIMIT 1',
+            v_product_id, v_requested_price
+          ) INTO v_price;
         END IF;
       END IF;
       IF NOT v_price_authorized THEN RAISE EXCEPTION 'Precio no autorizado para la variante %', v_variant; END IF;
@@ -302,8 +306,10 @@ BEGIN
     FROM public.product_variants pv JOIN public.products p ON p.id = pv.product_id
     WHERE pv.id = v_variant;
     IF abs(v_requested_price - v_price) > 0.01 THEN
-      EXECUTE 'SELECT d.discounted_price FROM public.products_with_active_discount d WHERE d.product_id = $1 AND abs(d.discounted_price - $2) <= 0.01 ORDER BY d.discounted_price LIMIT 1'
-        INTO v_price USING v_product_id, v_requested_price;
+      EXECUTE format(
+        'SELECT d.discounted_price FROM public.products_with_active_discount d WHERE d.product_id = %L::uuid AND abs(d.discounted_price - %L::numeric) <= 0.01 ORDER BY d.discounted_price LIMIT 1',
+        v_product_id, v_requested_price
+      ) INTO v_price;
     END IF;
     INSERT INTO public.sale_items(sale_id, variant_id, quantity, unit_price, subtotal) VALUES (v_sale_id, v_variant, v_qty, v_price, v_qty * v_price);
     UPDATE public.stock SET quantity = quantity - v_qty, updated_at = now() WHERE variant_id = v_variant AND branch_id = p_branch_id AND quantity >= v_qty;
@@ -316,20 +322,24 @@ $$;
 
 CREATE OR REPLACE FUNCTION public.sales_units_breakdown(p_dimension text, p_start_at timestamptz, p_end_at timestamptz, p_branch_id uuid DEFAULT NULL, p_top_n integer DEFAULT 10)
 RETURNS TABLE(label text, units bigint, percentage numeric) LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_branch_sql text;
 BEGIN
   PERFORM public.crm_assert_staff();
   IF NOT public.crm_is_admin() THEN RAISE EXCEPTION 'No autorizado para estas estadísticas'; END IF;
   IF p_dimension NOT IN ('category', 'size') OR p_start_at IS NULL OR p_end_at IS NULL OR p_start_at >= p_end_at THEN RAISE EXCEPTION 'Parámetros inválidos'; END IF;
+  v_branch_sql := CASE WHEN p_branch_id IS NULL THEN 'NULL::uuid' ELSE quote_literal(p_branch_id::text) || '::uuid' END;
   RETURN QUERY EXECUTE format(
-    'WITH grouped AS (SELECT coalesce(nullif(trim(%1$s), ''''), ''Sin clasificar'') AS label, sum(si.quantity)::bigint AS units
+    'WITH grouped AS (SELECT coalesce(nullif(trim(%s), ''''), ''Sin clasificar'') AS label, sum(si.quantity)::bigint AS units
       FROM public.sales s JOIN public.sale_items si ON si.sale_id = s.id
       JOIN public.product_variants v ON v.id = si.variant_id JOIN public.products p ON p.id = v.product_id
-      WHERE s.sale_date >= $1 AND s.sale_date < $2 AND ($3 IS NULL OR s.branch_id = $3) GROUP BY 1),
+      WHERE s.sale_date >= %L::timestamptz AND s.sale_date < %L::timestamptz AND (%s IS NULL OR s.branch_id = %s) GROUP BY 1),
     ranked AS (SELECT label, units, sum(units) OVER () AS total_units, row_number() OVER (ORDER BY units DESC, label) AS rn FROM grouped),
-    folded AS (SELECT CASE WHEN rn <= $4 THEN label ELSE ''Otros'' END AS label, sum(units)::bigint AS units, max(total_units) AS total_units FROM ranked GROUP BY 1)
+    folded AS (SELECT CASE WHEN rn <= %s THEN label ELSE ''Otros'' END AS label, sum(units)::bigint AS units, max(total_units) AS total_units FROM ranked GROUP BY 1)
     SELECT label, units, round((units::numeric / nullif(total_units, 0)) * 100, 2) FROM folded ORDER BY units DESC, label',
-    CASE WHEN p_dimension = 'category' THEN 'p.category' ELSE 'v.size' END
-  ) USING p_start_at, p_end_at, p_branch_id, LEAST(GREATEST(COALESCE(p_top_n, 10), 1), 100);
+    CASE WHEN p_dimension = 'category' THEN 'p.category' ELSE 'v.size' END,
+    p_start_at, p_end_at, v_branch_sql, v_branch_sql,
+    LEAST(GREATEST(COALESCE(p_top_n, 10), 1), 100)
+  );
 END;
 $$;
 
