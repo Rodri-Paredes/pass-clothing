@@ -14,6 +14,8 @@ import { useToastStore } from '../store/toastStore';
 import { CATEGORIES, SALE_CHANNELS } from '../lib/constants';
 import { usePaginatedProducts } from '../hooks/usePaginatedProducts';
 import { fmtMoney, fmtMoneyRaw, fmtQty } from '../lib/formatters';
+import CustomerSelector from '../components/customers/CustomerSelector';
+import type { Customer } from '../lib/types';
 
 interface CartItem {
   product: any;
@@ -48,6 +50,7 @@ const SalesPage: React.FC = () => {
   const [saleToEdit, setSaleToEdit] = useState<any | null>(null);
   const [saleChannel, setSaleChannel] = useState<'TIENDA' | 'WEB'>('TIENDA');
   const [filterChannel, setFilterChannel] = useState<string>('');
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   // Ref guard: prevents concurrent sale submissions (double-click or rapid retry)
   const isProcessingRef = useRef(false);
   const [isRefreshingProducts, setIsRefreshingProducts] = useState(false);
@@ -246,12 +249,14 @@ const SalesPage: React.FC = () => {
       }
 
       // Pass paymentType, discountAmount, paymentDetails, and notes to createSale
-      await createSale(items, activeBranch.id, user.id, paymentType, discountAmount, paymentDetails, saleNotes, saleChannel);
+      const clientRequestId = crypto.randomUUID();
+      await createSale(items, activeBranch.id, user.id, paymentType, discountAmount, paymentDetails, saleNotes, saleChannel, selectedCustomer?.id || null, clientRequestId);
       setCart([]);
       setDiscountAmount(0);
       setSaleNotes('');
       setMixedPaymentDetails({ efectivo: 0, qr: 0, tarjeta: 0 });
       setSaleChannel('TIENDA');
+      setSelectedCustomer(null);
       // Recargar stock ANTES de mostrar el modal para que el grid
       // refleje el estado real al cerrar la ventana de éxito.
       if (activeBranch) {
@@ -462,6 +467,10 @@ const SalesPage: React.FC = () => {
               <h3 className="text-xl font-bold mb-6 text-blue-900 flex items-center gap-2">
                 <ShoppingCart className="h-6 w-6 text-blue-500" /> Carrito de Venta
               </h3>
+              <div className="mb-5">
+                <p className="mb-2 text-sm font-semibold text-gray-700">Cliente <span className="font-normal text-gray-400">(opcional)</span></p>
+                <CustomerSelector value={selectedCustomer} onChange={setSelectedCustomer} />
+              </div>
               {cart.length === 0 ? (
                 <div className="text-center py-8 text-gray-400">
                   <ShoppingCart className="h-14 w-14 mx-auto mb-4 opacity-40" />

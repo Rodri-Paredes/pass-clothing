@@ -55,6 +55,7 @@ export interface Sale {
   id: string;
   user_id: string;
   branch_id: string;
+  customer_id?: string | null;
   total: number;
   subtotal?: number;
   discount_amount?: number;
@@ -69,6 +70,27 @@ export interface Sale {
   sale_items?: SaleItem[];
   user?: User;
   branch?: Branch;
+}
+
+export interface Customer {
+  id: string;
+  customer_code: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  full_name?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  instagram?: string | null;
+  created_at: string;
+  purchase_count?: number;
+  total_spent?: number;
+  last_purchase?: string | null;
+}
+
+export interface SalesUnitsBreakdown {
+  label: string;
+  units: number;
+  percentage: number;
 }
 
 
