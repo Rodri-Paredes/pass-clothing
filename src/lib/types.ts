@@ -93,6 +93,49 @@ export interface Customer {
   last_purchase?: string | null;
 }
 
+export type CrewRequestStatus = 'draft' | 'pending' | 'approved' | 'rejected' | 'cancelled';
+export type CrewMembershipStatus = 'scheduled' | 'active' | 'expired' | 'cancelled' | 'inactive';
+export type CrewBenefitType = 'percentage_discount' | 'fixed_discount' | 'product_discount' | 'category_discount' | 'drop_discount' | 'manual' | 'crew_plan';
+
+export interface CrewPlan {
+  id: string; code: string; name: string; price: number; currency: string;
+  duration_months: number; is_active: boolean; sort_order: number;
+}
+
+export interface CrewBenefitDefinition {
+  id: string; code: string; name: string; description?: string | null;
+  benefit_type: CrewBenefitType; rule: Record<string, unknown>; is_active: boolean; is_public: boolean;
+}
+
+export interface CrewMembershipRequest {
+  id: string; request_number: string; customer_id: string; plan_id: string;
+  plan_name_snapshot: string; plan_code_snapshot: string; price_snapshot: number;
+  currency_snapshot: string; duration_months_snapshot: number; status: CrewRequestStatus;
+  receipt_path?: string | null; rejection_reason?: string | null; reviewed_at?: string | null;
+  submitted_at?: string | null; created_at: string;
+  customer?: Customer; reviewed_by_user?: Pick<User, 'id' | 'name'>;
+}
+
+export interface CrewMembership {
+  id: string; member_number: string; customer_id: string; plan_id: string;
+  plan_name_snapshot: string; plan_code_snapshot: string; price_snapshot: number;
+  status: CrewMembershipStatus; started_at: string; expires_at: string; created_at: string;
+  customer?: Customer;
+}
+
+export interface CrewContext {
+  active: boolean; membership_id?: string | null; member_number?: string | null;
+  plan_id?: string | null; plan_name?: string | null; started_at?: string | null;
+  expires_at?: string | null; benefits: CrewBenefitDefinition[];
+}
+
+export interface CrewSaleQuote {
+  source: 'none' | 'crew' | 'manual' | 'catalog_promotion'; catalog_subtotal: number;
+  subtotal: number; discount_amount: number; total: number; savings: number;
+  membership_id?: string | null; benefit_id?: string | null;
+  benefit_snapshot?: Record<string, unknown> | null;
+}
+
 export interface SalesUnitsBreakdown {
   label: string;
   units: number;

@@ -11,6 +11,7 @@ import {
   Star,
   Percent,
   Activity,
+  Crown,
   MapPin,
   ChevronRight,
 } from 'lucide-react';
@@ -25,6 +26,7 @@ const NAV_MAIN = [
   { name: 'Ventas',         href: '/sales',        icon: ShoppingCart,    adminOnly: false },
   { name: 'Clientes',       href: '/customers',    icon: Users,           adminOnly: true  },
   { name: 'Estadísticas',   href: '/sales-statistics', icon: BarChart3,    adminOnly: true  },
+  { name: 'PASS Crew',      href: '/pass-crew',    icon: Crown,           adminOnly: true  },
   { name: 'Productos',      href: '/products',     icon: Package,         adminOnly: false },
   { name: 'Drops',          href: '/drops',        icon: Star,            adminOnly: true  },
   { name: 'Descuentos',     href: '/discounts',    icon: Percent,         adminOnly: true  },

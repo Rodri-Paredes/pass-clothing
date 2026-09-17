@@ -15,6 +15,7 @@ import DiscountsPage from './pages/DiscountsPage';
 import HealthDashboardPage from './pages/HealthDashboardPage';
 import CustomersPage from './pages/CustomersPage';
 import SalesStatisticsPage from './pages/SalesStatisticsPage';
+import PassCrewPage from './pages/PassCrewPage';
 import ToastContainer from './components/ui/Toast';
 
 function App() {
@@ -53,6 +54,7 @@ function App() {
           <Route path="/sales" element={<SalesPage />} />
           <Route path="/customers" element={user?.role === 'admin' ? <CustomersPage /> : <Navigate to="/dashboard" replace />} />
           <Route path="/sales-statistics" element={user?.role === 'admin' ? <SalesStatisticsPage /> : <Navigate to="/dashboard" replace />} />
+          <Route path="/pass-crew" element={user?.role === 'admin' ? <PassCrewPage /> : <Navigate to="/dashboard" replace />} />
           {/* <Route path="/reports" element={<DashboardPage />} /> */}
           <Route path="/cash-closure" element={<CashClosurePage />} />
           {/* <Route path="/diagnostic" element={<DiagnosticPage />} />
