@@ -256,7 +256,10 @@ BEGIN
   END IF;
   IF p_customer_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.customer_profiles WHERE id = p_customer_id AND deactivated_at IS NULL) THEN RAISE EXCEPTION 'Cliente inválido o desactivado'; END IF;
   IF p_payment_type NOT IN ('EFECTIVO', 'QR', 'TARJETA', 'MIXTO') THEN RAISE EXCEPTION 'Método de pago inválido'; END IF;
-  IF p_sale_channel NOT IN ('TIENDA', 'WEB') THEN RAISE EXCEPTION 'Canal de venta inválido'; END IF;
+  -- Mantiene todos los canales que el esquema histórico permite. El POS
+  -- existente usa TIENDA, pero V1 también admitía ventas por redes, teléfono
+  -- y delivery.
+  IF p_sale_channel NOT IN ('TIENDA', 'WEB', 'REDES_SOCIALES', 'TELEFONO', 'DELIVERY') THEN RAISE EXCEPTION 'Canal de venta inválido'; END IF;
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_items) LOOP
     v_variant := (v_item->>'variantId')::uuid; v_qty := (v_item->>'quantity')::integer; v_requested_price := (v_item->>'unitPrice')::numeric;
     IF v_qty IS NULL OR v_qty <= 0 OR v_requested_price IS NULL OR v_requested_price <= 0 THEN RAISE EXCEPTION 'Ítem inválido'; END IF;
@@ -333,3 +336,65 @@ REVOKE ALL ON FUNCTION public.search_customers(text, integer), public.crm_list_c
 REVOKE ALL ON FUNCTION public.crm_is_admin(), public.crm_current_branch_id(), public.crm_assert_staff() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.search_customers(text, integer), public.create_customer(text, text, text, text, text), public.create_sale_atomic_v2(uuid, uuid, jsonb, text, numeric, jsonb, text, text, uuid, uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.crm_list_customers(text, integer, integer), public.crm_customer_detail(uuid), public.sales_units_breakdown(text, timestamptz, timestamptz, uuid, integer) TO authenticated;
+
+-- El esquema desplegado tenía RLS desactivado en estas tablas y políticas con
+-- WITH CHECK (true). Las ventas deben entrar por RPC para no omitir la
+-- validación de precio, sucursal, stock e idempotencia.
+ALTER TABLE public.sales ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sale_items ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can insert sales for their branch or all if admin" ON public.sales;
+DROP POLICY IF EXISTS "Users can insert sale items for their branch or all if admin" ON public.sale_items;
+DROP POLICY IF EXISTS "Users can update sale items for their branch or all if admin" ON public.sale_items;
+DROP POLICY IF EXISTS "Users can delete sale items for their branch or all if admin" ON public.sale_items;
+DROP POLICY IF EXISTS "Users can read sale items for their branch or all if admin" ON public.sale_items;
+
+CREATE POLICY phase1_sale_items_select_by_branch ON public.sale_items
+  FOR SELECT TO authenticated
+  USING (EXISTS (
+    SELECT 1 FROM public.sales s
+    WHERE s.id = sale_items.sale_id
+      AND (public.crm_is_admin() OR s.branch_id = public.crm_current_branch_id())
+  ));
+
+REVOKE INSERT, DELETE ON TABLE public.sales FROM anon, authenticated;
+REVOKE INSERT, UPDATE, DELETE ON TABLE public.sale_items FROM anon, authenticated;
+
+-- Compatibilidad temporal para clientes del POS que aún invocan V1: no se
+-- confían subtotal, total ni user_id enviados por el cliente. V1 delega en
+-- V2 y conserva, cuando se solicita, su fecha histórica.
+CREATE OR REPLACE FUNCTION public.create_sale_atomic(
+  p_branch_id uuid, p_user_id uuid, p_items jsonb, p_payment_type text,
+  p_subtotal numeric, p_discount_amount numeric DEFAULT 0, p_total numeric DEFAULT 0,
+  p_sale_date text DEFAULT NULL, p_payment_details jsonb DEFAULT NULL,
+  p_notes text DEFAULT NULL, p_sale_channel text DEFAULT 'TIENDA'
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_result jsonb; v_sale_id uuid;
+BEGIN
+  IF p_user_id IS DISTINCT FROM auth.uid() THEN
+    RAISE EXCEPTION 'El usuario de la venta no coincide con la sesión';
+  END IF;
+
+  v_result := public.create_sale_atomic_v2(
+    p_branch_id, p_user_id, p_items, p_payment_type, p_discount_amount,
+    p_payment_details, p_notes, p_sale_channel, NULL, NULL
+  );
+  v_sale_id := (v_result->>'id')::uuid;
+
+  IF p_sale_date IS NOT NULL THEN
+    UPDATE public.sales SET sale_date = p_sale_date::timestamptz WHERE id = v_sale_id;
+    SELECT jsonb_build_object(
+      'id', id, 'user_id', user_id, 'branch_id', branch_id,
+      'subtotal', subtotal, 'discount_amount', discount_amount, 'total', total,
+      'sale_date', sale_date, 'payment_type', payment_type,
+      'payment_details', payment_details, 'notes', notes,
+      'sale_channel', sale_channel, 'created_at', created_at
+    ) INTO v_result FROM public.sales WHERE id = v_sale_id;
+  END IF;
+
+  RETURN v_result;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.create_sale_atomic(uuid, uuid, jsonb, text, numeric, numeric, numeric, text, jsonb, text, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.create_sale_atomic(uuid, uuid, jsonb, text, numeric, numeric, numeric, text, jsonb, text, text) TO authenticated;
