@@ -53,6 +53,8 @@ const SalesPage: React.FC = () => {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   // Ref guard: prevents concurrent sale submissions (double-click or rapid retry)
   const isProcessingRef = useRef(false);
+  // Conserva la clave entre reintentos de la misma venta si la respuesta se pierde.
+  const clientRequestIdRef = useRef<string | null>(null);
   const [isRefreshingProducts, setIsRefreshingProducts] = useState(false);
 
   useEffect(() => {
@@ -249,7 +251,8 @@ const SalesPage: React.FC = () => {
       }
 
       // Pass paymentType, discountAmount, paymentDetails, and notes to createSale
-      const clientRequestId = crypto.randomUUID();
+      const clientRequestId = clientRequestIdRef.current ?? crypto.randomUUID();
+      clientRequestIdRef.current = clientRequestId;
       await createSale(items, activeBranch.id, user.id, paymentType, discountAmount, paymentDetails, saleNotes, saleChannel, selectedCustomer?.id || null, clientRequestId);
       setCart([]);
       setDiscountAmount(0);
@@ -257,6 +260,7 @@ const SalesPage: React.FC = () => {
       setMixedPaymentDetails({ efectivo: 0, qr: 0, tarjeta: 0 });
       setSaleChannel('TIENDA');
       setSelectedCustomer(null);
+      clientRequestIdRef.current = null;
       // Recargar stock ANTES de mostrar el modal para que el grid
       // refleje el estado real al cerrar la ventana de éxito.
       if (activeBranch) {

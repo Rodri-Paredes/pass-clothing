@@ -228,7 +228,7 @@ CREATE OR REPLACE FUNCTION public.create_sale_atomic_v2(
   p_notes text DEFAULT NULL, p_sale_channel text DEFAULT 'TIENDA',
   p_customer_id uuid DEFAULT NULL, p_client_request_id uuid DEFAULT NULL
 ) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-DECLARE v_sale_id uuid; v_item jsonb; v_variant uuid; v_qty integer; v_price numeric; v_available integer;
+DECLARE v_sale_id uuid; v_item jsonb; v_variant uuid; v_qty integer; v_price numeric; v_requested_price numeric; v_available integer; v_catalog_price numeric; v_product_id uuid; v_price_authorized boolean;
   v_subtotal numeric := 0; v_total numeric; v_mixed_total numeric; v_rows integer; v_existing jsonb;
 BEGIN
   PERFORM public.crm_assert_staff();
@@ -244,8 +244,29 @@ BEGIN
   IF p_payment_type NOT IN ('EFECTIVO', 'QR', 'TARJETA', 'MIXTO') THEN RAISE EXCEPTION 'Método de pago inválido'; END IF;
   IF p_sale_channel NOT IN ('TIENDA', 'WEB') THEN RAISE EXCEPTION 'Canal de venta inválido'; END IF;
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_items) LOOP
-    v_variant := (v_item->>'variantId')::uuid; v_qty := (v_item->>'quantity')::integer; v_price := (v_item->>'unitPrice')::numeric;
-    IF v_qty IS NULL OR v_qty <= 0 OR v_price IS NULL OR v_price <= 0 THEN RAISE EXCEPTION 'Ítem inválido'; END IF;
+    v_variant := (v_item->>'variantId')::uuid; v_qty := (v_item->>'quantity')::integer; v_requested_price := (v_item->>'unitPrice')::numeric;
+    IF v_qty IS NULL OR v_qty <= 0 OR v_requested_price IS NULL OR v_requested_price <= 0 THEN RAISE EXCEPTION 'Ítem inválido'; END IF;
+    SELECT pv.product_id, p.price INTO v_product_id, v_catalog_price
+    FROM public.product_variants pv JOIN public.products p ON p.id = pv.product_id
+    WHERE pv.id = v_variant;
+    IF NOT FOUND THEN RAISE EXCEPTION 'Variante inválida %', v_variant; END IF;
+    -- Los precios de catálogo y las promociones activas son las únicas fuentes
+    -- permitidas para unit_price. El descuento manual sigue viajando separado.
+    v_price := v_catalog_price;
+    IF abs(v_requested_price - v_catalog_price) > 0.01 THEN
+      v_price_authorized := false;
+      -- La vista no se resuelve estáticamente: así la RPC sigue dando un error
+      -- explícito si un entorno antiguo no tiene el módulo de descuentos.
+      IF to_regclass('public.products_with_active_discount') IS NOT NULL THEN
+        EXECUTE 'SELECT EXISTS (SELECT 1 FROM public.products_with_active_discount d WHERE d.product_id = $1 AND abs(d.discounted_price - $2) <= 0.01)'
+          INTO v_price_authorized USING v_product_id, v_requested_price;
+        IF v_price_authorized THEN
+          EXECUTE 'SELECT d.discounted_price FROM public.products_with_active_discount d WHERE d.product_id = $1 AND abs(d.discounted_price - $2) <= 0.01 ORDER BY d.discounted_price LIMIT 1'
+            INTO v_price USING v_product_id, v_requested_price;
+        END IF;
+      END IF;
+      IF NOT v_price_authorized THEN RAISE EXCEPTION 'Precio no autorizado para la variante %', v_variant; END IF;
+    END IF;
     SELECT quantity INTO v_available FROM public.stock WHERE variant_id = v_variant AND branch_id = p_branch_id FOR UPDATE;
     IF NOT FOUND OR v_available < v_qty THEN RAISE EXCEPTION 'Stock insuficiente para la variante %', v_variant; END IF;
     v_subtotal := v_subtotal + (v_qty * v_price);
@@ -259,7 +280,14 @@ BEGIN
   INSERT INTO public.sales(user_id, branch_id, customer_id, client_request_id, subtotal, discount_amount, total, sale_date, payment_type, payment_details, notes, sale_channel)
   VALUES (p_user_id, p_branch_id, p_customer_id, p_client_request_id, v_subtotal, coalesce(p_discount_amount, 0), v_total, now(), p_payment_type, p_payment_details, nullif(trim(p_notes), ''), p_sale_channel) RETURNING id INTO v_sale_id;
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_items) LOOP
-    v_variant := (v_item->>'variantId')::uuid; v_qty := (v_item->>'quantity')::integer; v_price := (v_item->>'unitPrice')::numeric;
+    v_variant := (v_item->>'variantId')::uuid; v_qty := (v_item->>'quantity')::integer; v_requested_price := (v_item->>'unitPrice')::numeric;
+    SELECT pv.product_id, p.price INTO v_product_id, v_price
+    FROM public.product_variants pv JOIN public.products p ON p.id = pv.product_id
+    WHERE pv.id = v_variant;
+    IF abs(v_requested_price - v_price) > 0.01 THEN
+      EXECUTE 'SELECT d.discounted_price FROM public.products_with_active_discount d WHERE d.product_id = $1 AND abs(d.discounted_price - $2) <= 0.01 ORDER BY d.discounted_price LIMIT 1'
+        INTO v_price USING v_product_id, v_requested_price;
+    END IF;
     INSERT INTO public.sale_items(sale_id, variant_id, quantity, unit_price, subtotal) VALUES (v_sale_id, v_variant, v_qty, v_price, v_qty * v_price);
     UPDATE public.stock SET quantity = quantity - v_qty, updated_at = now() WHERE variant_id = v_variant AND branch_id = p_branch_id AND quantity >= v_qty;
     GET DIAGNOSTICS v_rows = ROW_COUNT; IF v_rows = 0 THEN RAISE EXCEPTION 'No se pudo decrementar stock'; END IF;
@@ -273,7 +301,7 @@ CREATE OR REPLACE FUNCTION public.sales_units_breakdown(p_dimension text, p_star
 RETURNS TABLE(label text, units bigint, percentage numeric) LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
   PERFORM public.crm_assert_staff();
-  IF NOT public.crm_is_admin() AND (p_branch_id IS NULL OR public.crm_current_branch_id() IS DISTINCT FROM p_branch_id) THEN RAISE EXCEPTION 'No autorizado para estas estadísticas'; END IF;
+  IF NOT public.crm_is_admin() THEN RAISE EXCEPTION 'No autorizado para estas estadísticas'; END IF;
   IF p_dimension NOT IN ('category', 'size') OR p_start_at IS NULL OR p_end_at IS NULL OR p_start_at >= p_end_at THEN RAISE EXCEPTION 'Parámetros inválidos'; END IF;
   RETURN QUERY EXECUTE format($sql$
     WITH grouped AS (SELECT coalesce(nullif(trim(%1$s), ''), 'Sin clasificar') AS label, sum(si.quantity)::bigint AS units
@@ -288,5 +316,6 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.search_customers(text, integer), public.crm_list_customers(text, integer, integer), public.crm_customer_detail(uuid), public.create_customer(text, text, text, text, text), public.create_sale_atomic_v2(uuid, uuid, jsonb, text, numeric, jsonb, text, text, uuid, uuid), public.sales_units_breakdown(text, timestamptz, timestamptz, uuid, integer) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.crm_is_admin(), public.crm_current_branch_id(), public.crm_assert_staff() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.search_customers(text, integer), public.create_customer(text, text, text, text, text), public.create_sale_atomic_v2(uuid, uuid, jsonb, text, numeric, jsonb, text, text, uuid, uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.crm_list_customers(text, integer, integer), public.crm_customer_detail(uuid), public.sales_units_breakdown(text, timestamptz, timestamptz, uuid, integer) TO authenticated;
