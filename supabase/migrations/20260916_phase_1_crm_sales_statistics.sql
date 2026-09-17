@@ -37,6 +37,7 @@ ALTER TABLE public.customer_profiles ADD COLUMN IF NOT EXISTS instagram text NUL
 ALTER TABLE public.customer_profiles ADD COLUMN IF NOT EXISTS customer_code text NULL;
 ALTER TABLE public.customer_profiles ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
 ALTER TABLE public.customer_profiles ADD COLUMN IF NOT EXISTS deactivated_at timestamptz NULL;
+ALTER TABLE public.customer_profiles ALTER COLUMN id SET DEFAULT gen_random_uuid();
 -- El prototipo de PASS Crew exigía full_name y email porque representaba una
 -- cuenta web. El CRM permite clientes de mostrador sin esos datos.
 ALTER TABLE public.customer_profiles ALTER COLUMN full_name DROP NOT NULL;
@@ -81,6 +82,10 @@ $$;
 CREATE OR REPLACE FUNCTION public.prepare_customer_profile()
 RETURNS trigger LANGUAGE plpgsql SET search_path = public AS $$
 BEGIN
+  -- Compatibilidad con el alta web anterior, que inserta id = auth.uid().
+  IF NEW.auth_user_id IS NULL AND auth.uid() IS NOT NULL AND NEW.id = auth.uid() THEN
+    NEW.auth_user_id := auth.uid();
+  END IF;
   NEW.phone_normalized := public.normalize_customer_phone(NEW.phone);
   NEW.full_name := NULLIF(trim(COALESCE(NEW.full_name,
     concat_ws(' ', NULLIF(trim(NEW.first_name), ''), NULLIF(trim(NEW.last_name), '')))), '');
@@ -129,12 +134,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_sales_client_request_id
 -- Los índices existentes ya cubren sales(branch_id, created_at) y sale_items(sale_id).
 
 ALTER TABLE public.customer_profiles ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS customer_profiles_select_own_or_admin ON public.customer_profiles;
-DROP POLICY IF EXISTS customer_profiles_insert_own ON public.customer_profiles;
-DROP POLICY IF EXISTS customer_profiles_update_own_or_admin ON public.customer_profiles;
-DROP POLICY IF EXISTS customer_profiles_no_direct_access ON public.customer_profiles;
-CREATE POLICY customer_profiles_no_direct_access ON public.customer_profiles
-  AS RESTRICTIVE FOR ALL TO authenticated USING (false) WITH CHECK (false);
 
 CREATE OR REPLACE FUNCTION public.crm_is_admin()
 RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
@@ -154,6 +153,21 @@ BEGIN
   END IF;
 END;
 $$;
+
+-- El CRM completo sigue tras RPC administrativa; el cliente web conserva solo
+-- acceso a su propio perfil por auth_user_id.
+DROP POLICY IF EXISTS customer_profiles_select_own_or_admin ON public.customer_profiles;
+DROP POLICY IF EXISTS customer_profiles_insert_own ON public.customer_profiles;
+DROP POLICY IF EXISTS customer_profiles_update_own_or_admin ON public.customer_profiles;
+DROP POLICY IF EXISTS customer_profiles_no_direct_access ON public.customer_profiles;
+CREATE POLICY customer_profiles_select_own_or_admin ON public.customer_profiles
+  FOR SELECT TO authenticated USING (auth.uid() = auth_user_id OR public.crm_is_admin());
+CREATE POLICY customer_profiles_insert_own ON public.customer_profiles
+  FOR INSERT TO authenticated WITH CHECK (auth.uid() = auth_user_id);
+CREATE POLICY customer_profiles_update_own_or_admin ON public.customer_profiles
+  FOR UPDATE TO authenticated
+  USING (auth.uid() = auth_user_id OR public.crm_is_admin())
+  WITH CHECK (auth.uid() = auth_user_id OR public.crm_is_admin());
 
 CREATE OR REPLACE FUNCTION public.search_customers(p_query text, p_limit integer DEFAULT 20)
 RETURNS TABLE(id uuid, customer_code text, full_name text, phone text)
