@@ -15,6 +15,7 @@ import { CATEGORIES, SALE_CHANNELS } from '../lib/constants';
 import { usePaginatedProducts } from '../hooks/usePaginatedProducts';
 import { fmtMoney, fmtMoneyRaw, fmtQty } from '../lib/formatters';
 import CustomerSelector from '../components/customers/CustomerSelector';
+import CreateCustomerModal from '../components/customers/CreateCustomerModal';
 import type { Customer } from '../lib/types';
 
 interface CartItem {
@@ -51,6 +52,7 @@ const SalesPage: React.FC = () => {
   const [saleChannel, setSaleChannel] = useState<'TIENDA' | 'WEB'>('TIENDA');
   const [filterChannel, setFilterChannel] = useState<string>('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [createCustomerOpen, setCreateCustomerOpen] = useState(false);
   // Ref guard: prevents concurrent sale submissions (double-click or rapid retry)
   const isProcessingRef = useRef(false);
   // Conserva la clave entre reintentos de la misma venta si la respuesta se pierde.
@@ -473,7 +475,7 @@ const SalesPage: React.FC = () => {
               </h3>
               <div className="mb-5">
                 <p className="mb-2 text-sm font-semibold text-gray-700">Cliente <span className="font-normal text-gray-400">(opcional)</span></p>
-                <CustomerSelector value={selectedCustomer} onChange={setSelectedCustomer} />
+                <CustomerSelector value={selectedCustomer} onChange={setSelectedCustomer} onCreate={() => setCreateCustomerOpen(true)} />
               </div>
               {cart.length === 0 ? (
                 <div className="text-center py-8 text-gray-400">
@@ -898,6 +900,7 @@ const SalesPage: React.FC = () => {
       </Card>
 
 
+      <CreateCustomerModal open={createCustomerOpen} onClose={() => setCreateCustomerOpen(false)} onCreated={setSelectedCustomer} />
       <Modal
         isOpen={showSalesForm}
         onClose={() => setShowSalesForm(false)}

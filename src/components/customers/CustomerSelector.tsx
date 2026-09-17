@@ -4,11 +4,11 @@ import Input from '../ui/Input';
 import type { Customer } from '../../lib/types';
 import { customerService } from '../../services/customerService';
 
-interface Props { value: Customer | null; onChange: (customer: Customer | null) => void; }
+interface Props { value: Customer | null; onChange: (customer: Customer | null) => void; onCreate?: () => void; }
 
 const customerName = (customer: Customer) => customer.full_name || [customer.first_name, customer.last_name].filter(Boolean).join(' ') || 'Sin nombre';
 
-export default function CustomerSelector({ value, onChange }: Props) {
+export default function CustomerSelector({ value, onChange, onCreate }: Props) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(false);
@@ -29,12 +29,13 @@ export default function CustomerSelector({ value, onChange }: Props) {
   if (value) return (
     <div className="flex items-center justify-between gap-3 rounded-lg border border-brand-200 bg-brand-50 p-3">
       <div className="min-w-0 flex items-center gap-2"><UserRound className="h-4 w-4 text-brand-600" /><div className="min-w-0"><p className="truncate text-sm font-semibold text-surface-900">{customerName(value)}</p><p className="text-xs text-surface-600">{value.customer_code}{value.phone ? ` · ${value.phone}` : ''}</p></div></div>
-      <button type="button" onClick={() => onChange(null)} className="rounded p-1 text-surface-500 hover:bg-brand-100" aria-label="Quitar cliente"><X className="h-4 w-4" /></button>
+      <div className="flex gap-1"><button type="button" onClick={() => onChange(null)} className="rounded px-2 py-1 text-xs text-brand-700 hover:bg-brand-100">Cambiar</button><button type="button" onClick={() => onChange(null)} className="rounded p-1 text-surface-500 hover:bg-brand-100" aria-label="Quitar cliente"><X className="h-4 w-4" /></button></div>
     </div>
   );
 
   return <div className="relative">
     <Input value={query} onChange={(e) => setQuery(e.target.value)} onFocus={() => results.length && setOpen(true)} placeholder="Cliente opcional: nombre, teléfono o código" prefix={<Search className="h-4 w-4" />} />
+    <div className="mt-2 flex items-center justify-between text-xs"><span className="text-surface-500">Venta sin cliente</span>{onCreate && <button type="button" onClick={onCreate} className="font-semibold text-brand-700 hover:text-brand-800">+ Nuevo cliente</button>}</div>
     {open && (results.length > 0 || loading) && <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-surface-200 bg-white py-1 shadow-lg">
       {loading && <p className="px-3 py-2 text-sm text-surface-500">Buscando…</p>}
       {!loading && results.map((customer) => <button type="button" key={customer.id} onClick={() => { onChange(customer); setQuery(''); setOpen(false); }} className="block w-full px-3 py-2 text-left hover:bg-surface-50"><p className="text-sm font-medium">{customerName(customer)} <span className="text-surface-500">{customer.customer_code}</span></p><p className="text-xs text-surface-500">{customer.phone || 'Sin teléfono'}</p></button>)}
