@@ -98,6 +98,15 @@ export interface SalesUnitsBreakdown {
   units: number;
   percentage: number;
 }
+export interface SalesChannelBreakdown {
+  channel: string;
+  sales_count: number;
+  units: number;
+  revenue: number;
+  sales_percentage: number;
+  units_percentage: number;
+  revenue_percentage: number;
+}
 
 
 export interface SaleItem {
