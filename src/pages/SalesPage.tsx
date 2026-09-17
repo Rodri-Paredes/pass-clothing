@@ -17,7 +17,8 @@ import { fmtMoney, fmtMoneyRaw } from '../lib/formatters';
 import CreateCustomerModal from '../components/customers/CreateCustomerModal';
 import PosProductGrid from '../components/sales/PosProductGrid';
 import PosCheckoutPanel, { type PosCartItem } from '../components/sales/PosCheckoutPanel';
-import type { Customer, Product, ProductVariant, Sale } from '../lib/types';
+import { crewService } from '../services/crewService';
+import type { CrewContext, CrewSaleQuote, Customer, Product, ProductVariant, Sale } from '../lib/types';
 
 const SalesPage: React.FC = () => {
   const { sales, loadSalesByBranch, createSale, updatePaymentMethod } = useSalesStore();
@@ -47,6 +48,9 @@ const SalesPage: React.FC = () => {
   const [saleChannel, setSaleChannel] = useState<'TIENDA' | 'WEB'>('TIENDA');
   const [filterChannel, setFilterChannel] = useState<string>('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [crewContext, setCrewContext] = useState<CrewContext | null>(null);
+  const [saleQuote, setSaleQuote] = useState<CrewSaleQuote | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
   const [createCustomerOpen, setCreateCustomerOpen] = useState(false);
   // Ref guard: prevents concurrent sale submissions (double-click or rapid retry)
   const isProcessingRef = useRef(false);
@@ -212,6 +216,35 @@ const SalesPage: React.FC = () => {
     }, 0);
   };
 
+  const quoteItems = useMemo(() => cart.map(item => ({
+    variantId: item.product.variant_id,
+    quantity: item.quantity,
+    unitPrice: item.product.finalPrice || item.product.price,
+  })), [cart]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedCustomer) { setCrewContext(null); return; }
+    crewService.context(selectedCustomer.id).then(value => { if (!cancelled) setCrewContext(value); }).catch(() => { if (!cancelled) setCrewContext(null); });
+    return () => { cancelled = true; };
+  }, [selectedCustomer]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (quoteItems.length === 0) { setSaleQuote(null); setQuoteLoading(false); return; }
+    setQuoteLoading(true);
+    const timer = window.setTimeout(() => {
+      crewService.quote(selectedCustomer?.id || null, quoteItems, discountAmount)
+        .then(value => { if (!cancelled) setSaleQuote(value); })
+        .catch(() => { if (!cancelled) setSaleQuote(null); })
+        .finally(() => { if (!cancelled) setQuoteLoading(false); });
+    }, 180);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [quoteItems, selectedCustomer, discountAmount]);
+
+  const effectiveSubtotal = saleQuote?.subtotal ?? getSubtotal();
+  const effectiveTotal = saleQuote?.total ?? getTotalAmount();
+
   const handleProcessSale = async () => {
     if (cart.length === 0 || !activeBranch || !user) return;
     // Hard guard: block concurrent submissions even if React state hasn't updated yet
@@ -219,7 +252,7 @@ const SalesPage: React.FC = () => {
 
     // Validate MIXTO payment totals before submitting
     if (paymentType === 'MIXTO') {
-      const expectedTotal = getTotalAmount();
+      const expectedTotal = effectiveTotal;
       const mixedSum =
         (mixedPaymentDetails.efectivo || 0) +
         (mixedPaymentDetails.qr || 0) +
@@ -398,8 +431,11 @@ const SalesPage: React.FC = () => {
           discountAmount={discountAmount}
           onDiscountChange={setDiscountAmount}
           productDiscount={getTotalDiscountFromProducts()}
-          subtotal={getSubtotal()}
-          total={getTotalAmount()}
+          subtotal={effectiveSubtotal}
+          total={effectiveTotal}
+          crewContext={crewContext}
+          saleQuote={saleQuote}
+          quoteLoading={quoteLoading}
           paymentType={paymentType}
           onPaymentTypeChange={setPaymentType}
           mixedPayment={mixedPaymentDetails}

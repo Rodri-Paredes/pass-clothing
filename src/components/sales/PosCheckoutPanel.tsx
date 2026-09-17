@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import Button from '../ui/Button';
 import CustomerSelector from '../customers/CustomerSelector';
-import type { Customer } from '../../lib/types';
+import type { CrewContext, CrewSaleQuote, Customer } from '../../lib/types';
 import { fmtMoneyRaw } from '../../lib/formatters';
 import PosCart, { type PosCartItem } from './PosCart';
 import PosPaymentSelector, { type PosMixedPayment, type PosPaymentType } from './PosPaymentSelector';
@@ -23,6 +23,9 @@ interface Props {
   productDiscount: number;
   subtotal: number;
   total: number;
+  crewContext: CrewContext | null;
+  saleQuote: CrewSaleQuote | null;
+  quoteLoading: boolean;
   paymentType: PosPaymentType;
   onPaymentTypeChange: (type: PosPaymentType) => void;
   mixedPayment: PosMixedPayment;
@@ -44,7 +47,7 @@ export default function PosCheckoutPanel(props: Props) {
   const itemCount = props.cart.reduce((sum, item) => sum + item.quantity, 0);
   const mixedTotal = props.mixedPayment.efectivo + props.mixedPayment.qr + props.mixedPayment.tarjeta;
   const mixedRemaining = props.total - mixedTotal;
-  const checkoutDisabled = props.cart.length === 0 || props.isProcessing || (props.paymentType === 'MIXTO' && Math.abs(mixedRemaining) > 0.01);
+  const checkoutDisabled = props.cart.length === 0 || props.isProcessing || props.quoteLoading || !props.saleQuote || (props.paymentType === 'MIXTO' && Math.abs(mixedRemaining) > 0.01);
 
   useEffect(() => {
     if (props.cart.length === 0) {
@@ -59,10 +62,10 @@ export default function PosCheckoutPanel(props: Props) {
       <button type="button" onClick={() => setMobileOpen(false)} className="p-2 text-surface-500 xl:hidden" aria-label="Cerrar venta"><X className="h-5 w-5"/></button>
     </header>
     <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-      <section className="pb-4"><p className="mb-2 text-xs font-semibold uppercase tracking-wider text-surface-500">Cliente</p><CustomerSelector value={props.customer} onChange={props.onCustomerChange} onCreate={props.onCreateCustomer}/></section>
+      <section className="pb-4"><p className="mb-2 text-xs font-semibold uppercase tracking-wider text-surface-500">Cliente</p><CustomerSelector value={props.customer} onChange={props.onCustomerChange} onCreate={props.onCreateCustomer}/>{props.crewContext?.active && <div className="mt-2 bg-amber-50 px-3 py-2 text-xs text-amber-900"><div className="flex items-center justify-between"><strong>PASS Crew · {props.crewContext.plan_name}</strong><span>Vence {new Date(props.crewContext.expires_at || '').toLocaleDateString('es-BO')}</span></div>{props.crewContext.benefits.length > 0 && <p className="mt-1 text-amber-800">{props.crewContext.benefits.map(item => item.name).join(' · ')}</p>}</div>}</section>
       <PosCart items={props.cart} onQuantityChange={props.onQuantityChange} onRemove={props.onRemove}/>
       {props.cart.length > 0 && <>
-        <PosSaleSummary discountAmount={props.discountAmount} onDiscountChange={props.onDiscountChange} productDiscount={props.productDiscount} subtotal={props.subtotal} total={props.total}/>
+        <PosSaleSummary discountAmount={props.discountAmount} onDiscountChange={props.onDiscountChange} productDiscount={props.productDiscount} subtotal={props.subtotal} total={props.total} quote={props.saleQuote} quoteLoading={props.quoteLoading}/>
         <PosPaymentSelector value={props.paymentType} onChange={props.onPaymentTypeChange} mixedPayment={props.mixedPayment} onMixedPaymentChange={props.onMixedPaymentChange} total={props.total} cashReceived={cashReceived} onCashReceivedChange={setCashReceived}/>
         <details open className="border-t border-surface-200 py-3 text-sm"><summary className="cursor-pointer text-surface-600">Detalles de la venta</summary><div className="mt-3 grid grid-cols-2 gap-3"><select value={props.channel} onChange={event => props.onChannelChange(event.target.value as 'TIENDA' | 'WEB')} className="border border-surface-300 p-2 text-sm"><option value="TIENDA">Tienda</option><option value="WEB">Web</option></select><input value={props.notes} onChange={event => props.onNotesChange(event.target.value)} placeholder="Nota opcional" maxLength={200} className="border border-surface-300 p-2 text-sm"/></div></details>
       </>}

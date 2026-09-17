@@ -18,9 +18,9 @@ export class SalesService {
     customerId?: string | null,
     clientRequestId?: string
   ): Promise<Sale> {
-    // v2 calcula subtotal y total en PostgreSQL, valida sesión, sucursal,
-    // cliente, stock y pago mixto. El frontend nunca actualiza stock.
-    const { data: rpcResult, error: rpcErr } = await supabase.rpc('create_sale_atomic_v2', {
+    // v3 elige en servidor una sola fuente de descuento y delega la transacción
+    // de stock/caja/idempotencia a v2.
+    const { data: rpcResult, error: rpcErr } = await supabase.rpc('create_sale_atomic_v3', {
       p_branch_id:       branchId,
       p_user_id:         userId,
       p_items:           items.map((i) => ({
