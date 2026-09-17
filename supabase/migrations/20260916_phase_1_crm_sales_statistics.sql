@@ -320,15 +320,16 @@ BEGIN
   PERFORM public.crm_assert_staff();
   IF NOT public.crm_is_admin() THEN RAISE EXCEPTION 'No autorizado para estas estadísticas'; END IF;
   IF p_dimension NOT IN ('category', 'size') OR p_start_at IS NULL OR p_end_at IS NULL OR p_start_at >= p_end_at THEN RAISE EXCEPTION 'Parámetros inválidos'; END IF;
-  RETURN QUERY EXECUTE format($sql$
-    WITH grouped AS (SELECT coalesce(nullif(trim(%1$s), ''), 'Sin clasificar') AS label, sum(si.quantity)::bigint AS units
+  RETURN QUERY EXECUTE format(
+    'WITH grouped AS (SELECT coalesce(nullif(trim(%1$s), ''''), ''Sin clasificar'') AS label, sum(si.quantity)::bigint AS units
       FROM public.sales s JOIN public.sale_items si ON si.sale_id = s.id
       JOIN public.product_variants v ON v.id = si.variant_id JOIN public.products p ON p.id = v.product_id
       WHERE s.sale_date >= $1 AND s.sale_date < $2 AND ($3 IS NULL OR s.branch_id = $3) GROUP BY 1),
     ranked AS (SELECT label, units, sum(units) OVER () AS total_units, row_number() OVER (ORDER BY units DESC, label) AS rn FROM grouped),
-    folded AS (SELECT CASE WHEN rn <= $4 THEN label ELSE 'Otros' END AS label, sum(units)::bigint AS units, max(total_units) AS total_units FROM ranked GROUP BY 1)
-    SELECT label, units, round((units::numeric / nullif(total_units, 0)) * 100, 2) FROM folded ORDER BY units DESC, label
-  $sql$, CASE WHEN p_dimension = 'category' THEN 'p.category' ELSE 'v.size' END) USING p_start_at, p_end_at, p_branch_id, LEAST(GREATEST(COALESCE(p_top_n, 10), 1), 100);
+    folded AS (SELECT CASE WHEN rn <= $4 THEN label ELSE ''Otros'' END AS label, sum(units)::bigint AS units, max(total_units) AS total_units FROM ranked GROUP BY 1)
+    SELECT label, units, round((units::numeric / nullif(total_units, 0)) * 100, 2) FROM folded ORDER BY units DESC, label',
+    CASE WHEN p_dimension = 'category' THEN 'p.category' ELSE 'v.size' END
+  ) USING p_start_at, p_end_at, p_branch_id, LEAST(GREATEST(COALESCE(p_top_n, 10), 1), 100);
 END;
 $$;
 
