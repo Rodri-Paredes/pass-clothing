@@ -14,26 +14,13 @@ export class SalesService {
       tarjeta?: number;
     },
     notes?: string,
-    saleChannel: 'TIENDA' | 'WEB' = 'TIENDA'
+    saleChannel: 'TIENDA' | 'WEB' = 'TIENDA',
+    customerId?: string | null,
+    clientRequestId?: string
   ): Promise<Sale> {
-    const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
-    const total = Math.max(0, subtotal - discountAmount);
-
-    // Bolivia timestamp
-    const now = new Date();
-    const boliviaTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/La_Paz' }));
-    const year = boliviaTime.getFullYear();
-    const month = String(boliviaTime.getMonth() + 1).padStart(2, '0');
-    const day = String(boliviaTime.getDate()).padStart(2, '0');
-    const hours = String(boliviaTime.getHours()).padStart(2, '0');
-    const minutes = String(boliviaTime.getMinutes()).padStart(2, '0');
-    const seconds = String(boliviaTime.getSeconds()).padStart(2, '0');
-    const saleDateISO = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}-04:00`;
-
-    // create_sale_atomic es la ÚNICA fuente de verdad:
-    // valida stock, inserta venta + items y decrementa stock dentro de
-    // una sola transacción en PostgreSQL. El frontend NO toca stock.
-    const { data: rpcResult, error: rpcErr } = await supabase.rpc('create_sale_atomic', {
+    // v2 calcula subtotal y total en PostgreSQL, valida sesión, sucursal,
+    // cliente, stock y pago mixto. El frontend nunca actualiza stock.
+    const { data: rpcResult, error: rpcErr } = await supabase.rpc('create_sale_atomic_v2', {
       p_branch_id:       branchId,
       p_user_id:         userId,
       p_items:           items.map((i) => ({
@@ -42,13 +29,12 @@ export class SalesService {
         unitPrice: i.unitPrice,
       })),
       p_payment_type:    paymentType,
-      p_subtotal:        subtotal,
       p_discount_amount: discountAmount,
-      p_total:           total,
-      p_sale_date:       saleDateISO,
       p_payment_details: paymentType === 'MIXTO' && paymentDetails ? paymentDetails : null,
       p_notes:           notes && notes.trim() ? notes.trim() : null,
       p_sale_channel:    saleChannel,
+      p_customer_id:     customerId || null,
+      p_client_request_id: clientRequestId || null,
     });
 
     if (rpcErr) throw rpcErr;

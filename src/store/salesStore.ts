@@ -21,7 +21,9 @@ interface SalesState {
       tarjeta?: number;
     },
     notes?: string,
-    saleChannel?: 'TIENDA' | 'WEB'
+    saleChannel?: 'TIENDA' | 'WEB',
+    customerId?: string | null,
+    clientRequestId?: string
   ) => Promise<Sale>;
   updatePaymentMethod: (
     saleId: string,
@@ -67,8 +69,8 @@ export const useSalesStore = create<SalesState>((set) => ({
     }
   },
 
-  createSale: async (items, branchId, userId, paymentType, discountAmount = 0, paymentDetails, notes, saleChannel = 'TIENDA') => {
-    const sale = await salesService.createSale(items, branchId, userId, paymentType, discountAmount, paymentDetails, notes, saleChannel);
+  createSale: async (items, branchId, userId, paymentType, discountAmount = 0, paymentDetails, notes, saleChannel = 'TIENDA', customerId, clientRequestId) => {
+    const sale = await salesService.createSale(items, branchId, userId, paymentType, discountAmount, paymentDetails, notes, saleChannel, customerId, clientRequestId);
     set(state => ({
       sales: [sale, ...state.sales]
     }));

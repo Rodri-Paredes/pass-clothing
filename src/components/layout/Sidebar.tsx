@@ -23,6 +23,8 @@ interface SidebarProps {
 const NAV_MAIN = [
   { name: 'Dashboard',      href: '/dashboard',    icon: LayoutDashboard, adminOnly: false },
   { name: 'Ventas',         href: '/sales',        icon: ShoppingCart,    adminOnly: false },
+  { name: 'Clientes',       href: '/customers',    icon: Users,           adminOnly: true  },
+  { name: 'Estadísticas',   href: '/sales-statistics', icon: BarChart3,    adminOnly: true  },
   { name: 'Productos',      href: '/products',     icon: Package,         adminOnly: false },
   { name: 'Drops',          href: '/drops',        icon: Star,            adminOnly: true  },
   { name: 'Descuentos',     href: '/discounts',    icon: Percent,         adminOnly: true  },

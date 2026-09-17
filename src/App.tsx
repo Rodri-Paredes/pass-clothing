@@ -13,6 +13,8 @@ import UsersPage from './pages/UsersPage';
 import SettingsPage from './pages/SettingsPage';
 import DiscountsPage from './pages/DiscountsPage';
 import HealthDashboardPage from './pages/HealthDashboardPage';
+import CustomersPage from './pages/CustomersPage';
+import SalesStatisticsPage from './pages/SalesStatisticsPage';
 import ToastContainer from './components/ui/Toast';
 
 function App() {
@@ -49,6 +51,8 @@ function App() {
           <Route path="/drops" element={user?.role === 'admin' ? <DropsPage /> : <Navigate to="/dashboard" replace />} />
           <Route path="/discounts" element={user?.role === 'admin' ? <DiscountsPage /> : <Navigate to="/dashboard" replace />} />
           <Route path="/sales" element={<SalesPage />} />
+          <Route path="/customers" element={user?.role === 'admin' ? <CustomersPage /> : <Navigate to="/dashboard" replace />} />
+          <Route path="/sales-statistics" element={user?.role === 'admin' ? <SalesStatisticsPage /> : <Navigate to="/dashboard" replace />} />
           {/* <Route path="/reports" element={<DashboardPage />} /> */}
           <Route path="/cash-closure" element={<CashClosurePage />} />
           {/* <Route path="/diagnostic" element={<DiagnosticPage />} />
