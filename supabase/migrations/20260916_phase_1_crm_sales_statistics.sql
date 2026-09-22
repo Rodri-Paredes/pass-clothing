@@ -89,7 +89,12 @@ BEGIN
   NEW.phone_normalized := public.normalize_customer_phone(NEW.phone);
   NEW.full_name := NULLIF(trim(COALESCE(NEW.full_name,
     concat_ws(' ', NULLIF(trim(NEW.first_name), ''), NULLIF(trim(NEW.last_name), '')))), '');
-  IF NEW.customer_code IS NULL OR trim(NEW.customer_code) = '' THEN
+  -- El código es una identidad comercial estable. Solo se permite completar
+  -- perfiles históricos que todavía no tenían código; nunca se reemplaza uno
+  -- ya asignado mediante una edición de perfil.
+  IF TG_OP = 'UPDATE' AND OLD.customer_code IS NOT NULL AND trim(OLD.customer_code) <> '' THEN
+    NEW.customer_code := OLD.customer_code;
+  ELSIF NEW.customer_code IS NULL OR trim(NEW.customer_code) = '' THEN
     NEW.customer_code := 'PASS-' || lpad(nextval('public.customer_code_seq')::text, 6, '0');
   END IF;
   NEW.updated_at := now();

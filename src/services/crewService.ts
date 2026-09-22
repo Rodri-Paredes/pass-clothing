@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import type { CrewBenefitDefinition, CrewContext, CrewMembership, CrewMembershipRequest, CrewPlan, CrewSaleQuote } from '../lib/types';
+import type { CustomerAccountLinkRequest, CrewBenefitDefinition, CrewContext, CrewMembership, CrewMembershipRequest, CrewPlan, CrewSaleQuote } from '../lib/types';
 
 const fail = (error: { message: string } | null) => { if (error) throw error; };
 
@@ -15,6 +15,10 @@ export const crewService = {
   async memberships() {
     const { data, error } = await supabase.from('crew_memberships').select('*, customer:customer_profiles(id,customer_code,first_name,last_name,full_name,phone,email)').order('started_at', { ascending: false }); fail(error);
     return (data || []) as CrewMembership[];
+  },
+  async accountLinkRequests() {
+    const { data, error } = await supabase.from('customer_account_link_requests').select('*, customer:customer_profiles(id,customer_code,first_name,last_name,full_name,phone,email)').eq('status', 'pending').order('created_at', { ascending: false }); fail(error);
+    return (data || []) as CustomerAccountLinkRequest[];
   },
   async plans() {
     const { data, error } = await supabase.from('crew_plans').select('*').order('sort_order'); fail(error);
@@ -32,6 +36,8 @@ export const crewService = {
   },
   async approve(requestId: string) { const { error } = await supabase.rpc('approve_crew_request', { p_request_id: requestId }); fail(error); },
   async reject(requestId: string, reason?: string) { const { error } = await supabase.rpc('reject_crew_request', { p_request_id: requestId, p_reason: reason || null }); fail(error); },
+  async approveAccountLink(requestId: string) { const { error } = await supabase.rpc('approve_customer_account_link', { p_request_id: requestId }); fail(error); },
+  async rejectAccountLink(requestId: string, reason?: string) { const { error } = await supabase.rpc('reject_customer_account_link', { p_request_id: requestId, p_reason: reason || null }); fail(error); },
   async receiptUrl(path: string) { const { data, error } = await supabase.storage.from('crew-receipts').createSignedUrl(path, 300); fail(error); return data?.signedUrl || null; },
   async savePlan(plan: CrewPlan) { const { error } = await supabase.from('crew_plans').update({ name: plan.name, price: plan.price, duration_months: plan.duration_months, is_active: plan.is_active }).eq('id', plan.id); fail(error); },
   async createBenefit(input: Omit<CrewBenefitDefinition, 'id'>, planIds: string[]) {

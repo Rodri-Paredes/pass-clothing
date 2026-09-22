@@ -123,6 +123,13 @@ export interface CrewMembership {
   customer?: Customer;
 }
 
+export interface CustomerAccountLinkRequest {
+  id: string; customer_id: string; auth_user_id: string; auth_email: string;
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  rejection_reason?: string | null; created_at: string;
+  customer?: Customer;
+}
+
 export interface CrewContext {
   active: boolean; membership_id?: string | null; member_number?: string | null;
   plan_id?: string | null; plan_name?: string | null; started_at?: string | null;
