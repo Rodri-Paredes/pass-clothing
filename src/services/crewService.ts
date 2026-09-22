@@ -51,7 +51,7 @@ export const crewService = {
   },
   async saveSettings(paymentInstructions: string | null, paymentQrPath: string | null) { const { error } = await supabase.from('crew_settings').update({ payment_instructions: paymentInstructions, payment_qr_path: paymentQrPath }).eq('id', 1); fail(error); },
   async uploadQr(file: File) { const extension = file.name.split('.').pop()?.toLowerCase() || 'png'; const path = `payment/crew-qr-${Date.now()}.${extension}`; const { error } = await supabase.storage.from('crew-assets').upload(path, file, { upsert: false }); fail(error); return path; },
-  async context(customerId: string) { const { data, error } = await supabase.rpc('get_customer_crew_context', { p_customer_id: customerId }); fail(error); return data as CrewContext; },
+  async context(customerId: string) { const [{ data, error }, loyalty] = await Promise.all([supabase.rpc('get_customer_crew_context', { p_customer_id: customerId }), supabase.rpc('get_customer_loyalty_summary', { p_customer_id: customerId })]); fail(error); return { ...(data as CrewContext), loyalty_enabled: Boolean(loyalty.data?.enabled), points_balance: Number(loyalty.data?.points_balance || 0) } as CrewContext; },
   async quote(customerId: string | null, items: Array<{ variantId: string; quantity: number; unitPrice: number }>, manualDiscount: number) {
     const { data, error } = await supabase.rpc('crew_calculate_sale_quote', { p_customer_id: customerId, p_items: items, p_manual_discount: manualDiscount }); fail(error); return data as CrewSaleQuote;
   },

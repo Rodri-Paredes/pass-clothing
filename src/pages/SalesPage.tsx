@@ -33,6 +33,7 @@ const SalesPage: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [isProcessingSale, setIsProcessingSale] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [lastPointsEarned, setLastPointsEarned] = useState(0);
   const [paymentType, setPaymentType] = useState<'QR' | 'EFECTIVO' | 'TARJETA' | 'MIXTO'>('EFECTIVO');
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [discountAmount, setDiscountAmount] = useState<number>(0);
@@ -283,7 +284,8 @@ const SalesPage: React.FC = () => {
       // Pass paymentType, discountAmount, paymentDetails, and notes to createSale
       const clientRequestId = clientRequestIdRef.current ?? crypto.randomUUID();
       clientRequestIdRef.current = clientRequestId;
-      await createSale(items, activeBranch.id, user.id, paymentType, discountAmount, paymentDetails, saleNotes, saleChannel, selectedCustomer?.id || null, clientRequestId);
+      const completedSale = await createSale(items, activeBranch.id, user.id, paymentType, discountAmount, paymentDetails, saleNotes, saleChannel, selectedCustomer?.id || null, clientRequestId);
+      setLastPointsEarned(Number(completedSale.loyalty_points_earned || 0));
       setCart([]);
       setDiscountAmount(0);
       setSaleNotes('');
@@ -615,6 +617,7 @@ const SalesPage: React.FC = () => {
         <div className="flex flex-col items-center justify-center py-8">
           <CheckCircle className="h-16 w-16 text-green-500 animate-bounce mb-4" />
           <h3 className="text-xl font-bold text-green-700 mb-2">¡Venta registrada exitosamente!</h3>
+          {lastPointsEarned > 0 && <p className="rounded-lg bg-violet-50 px-4 py-3 text-sm font-semibold text-violet-800">+{lastPointsEarned} puntos acumulados</p>}
           <Button className="mt-4" onClick={() => setShowSuccessModal(false)}>
             Cerrar
           </Button>

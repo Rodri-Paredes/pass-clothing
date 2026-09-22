@@ -1,8 +1,17 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import Button from '../components/ui/Button';
+import Card from '../components/ui/Card';
+import { customerService } from '../services/customerService';
+import type { LoyaltySettings } from '../lib/types';
 
 
-const SettingsPage: React.FC = () => (
-  <div className="p-8 max-w-3xl mx-auto">
+const SettingsPage: React.FC = () => {
+  const [loyalty, setLoyalty] = useState<LoyaltySettings | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+  useEffect(() => { customerService.loyaltySettings().then(setLoyalty).catch(() => setMessage('No se pudo cargar la configuración de fidelidad.')); }, []);
+  const saveLoyalty = async () => { if (!loyalty) return; setSaving(true); setMessage(''); try { setLoyalty(await customerService.updateLoyaltySettings(loyalty)); setMessage('Configuración de puntos guardada.'); } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo guardar.'); } finally { setSaving(false); } };
+  return <div className="mx-auto max-w-3xl p-8">
     <h1 className="text-2xl font-bold mb-4">Configuración General</h1>
     <p className="text-gray-600 mb-8">Personaliza los ajustes generales del sistema de gestión de Pass Clothing.</p>
 
@@ -38,6 +47,8 @@ const SettingsPage: React.FC = () => (
       <p className="text-xs text-gray-400">(Próximamente podrás personalizar la apariencia del sistema)</p>
     </section>
 
+    {loyalty && <Card className="mb-8"><div className="space-y-5 p-6"><div><h2 className="text-xl font-semibold">Fidelidad / Puntos</h2><p className="mt-1 text-sm text-gray-500">Configura la regla sin hardcodear valores comerciales. Los cambios aplican a nuevas ventas.</p></div><label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={loyalty.enabled} onChange={e => setLoyalty({...loyalty, enabled: e.target.checked})}/> Activar acumulación de puntos</label><div className="grid gap-4 sm:grid-cols-2"><label className="text-sm">Puntos por unidad monetaria<input type="number" min="0" step="0.01" value={loyalty.points_per_currency_unit} onChange={e => setLoyalty({...loyalty, points_per_currency_unit: Number(e.target.value)})} className="mt-1 w-full rounded border px-3 py-2"/></label><label className="text-sm">Cada Bs<input type="number" min="0.01" step="0.01" value={loyalty.currency_unit_amount} onChange={e => setLoyalty({...loyalty, currency_unit_amount: Number(e.target.value)})} className="mt-1 w-full rounded border px-3 py-2"/></label><label className="text-sm">Compra mínima<input type="number" min="0" step="0.01" value={loyalty.minimum_purchase_amount} onChange={e => setLoyalty({...loyalty, minimum_purchase_amount: Number(e.target.value)})} className="mt-1 w-full rounded border px-3 py-2"/></label><label className="text-sm">Máximo por venta<input type="number" min="0" placeholder="Sin límite" value={loyalty.max_points_per_sale ?? ''} onChange={e => setLoyalty({...loyalty, max_points_per_sale: e.target.value ? Number(e.target.value) : null})} className="mt-1 w-full rounded border px-3 py-2"/></label></div><div className="grid gap-4 sm:grid-cols-2"><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={loyalty.expiration_enabled} onChange={e => setLoyalty({...loyalty, expiration_enabled: e.target.checked})}/> Activar expiración</label><label className="text-sm">Días de expiración<input type="number" min="1" disabled={!loyalty.expiration_enabled} value={loyalty.expiration_days ?? ''} onChange={e => setLoyalty({...loyalty, expiration_days: e.target.value ? Number(e.target.value) : null})} className="mt-1 w-full rounded border px-3 py-2 disabled:bg-gray-100"/></label></div><div className="border-t pt-4"><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={loyalty.redemption_enabled} onChange={e => setLoyalty({...loyalty, redemption_enabled: e.target.checked})}/> Habilitar canje (arquitectura preparada; flujo aún no activo)</label><p className="mt-1 text-xs text-gray-500">No se implementa equivalencia de puntos a bolivianos hasta definirla.</p></div><div className="flex items-center justify-between border-t pt-4"><span className="text-sm text-gray-500">{message}</span><Button onClick={saveLoyalty} disabled={saving}>{saving ? 'Guardando…' : 'Guardar puntos'}</Button></div></div></Card>}
+
     {/* Integraciones */}
     <section className="mb-8 bg-white rounded-lg shadow p-6">
       <h2 className="text-xl font-semibold mb-2">Integraciones</h2>
@@ -59,7 +70,7 @@ const SettingsPage: React.FC = () => (
       </ul>
       <p className="text-xs text-gray-400 mt-2">(Próximamente podrás administrar los permisos y roles desde aquí)</p>
     </section>
-  </div>
-);
+  </div>;
+};
 
 export default SettingsPage;

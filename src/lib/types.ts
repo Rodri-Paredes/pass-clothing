@@ -74,12 +74,14 @@ export interface Sale {
   sale_date: string;
   created_at: string;
   sale_items?: SaleItem[];
+  loyalty_points_earned?: number;
   user?: User;
   branch?: Branch;
 }
 
 export interface Customer {
   id: string;
+  auth_user_id?: string | null;
   customer_code: string;
   first_name?: string | null;
   last_name?: string | null;
@@ -91,6 +93,41 @@ export interface Customer {
   purchase_count?: number;
   total_spent?: number;
   last_purchase?: string | null;
+  deactivated_at?: string | null;
+}
+
+export interface LoyaltyTransaction {
+  id: string;
+  sale_id?: string | null;
+  type: string;
+  points: number;
+  balance_after: number;
+  reason: string;
+  created_by?: string | null;
+  created_at: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface LoyaltySummary {
+  customer_id: string;
+  enabled: boolean;
+  points_balance: number;
+  lifetime_points_earned: number;
+  lifetime_points_redeemed: number;
+  transactions: LoyaltyTransaction[];
+}
+
+export interface LoyaltySettings {
+  enabled: boolean;
+  points_per_currency_unit: number;
+  currency_unit_amount: number;
+  minimum_purchase_amount: number;
+  max_points_per_sale: number | null;
+  expiration_enabled: boolean;
+  expiration_days: number | null;
+  redemption_enabled: boolean;
+  redemption_value: number;
+  min_points_to_redeem: number;
 }
 
 export type CrewRequestStatus = 'draft' | 'pending' | 'approved' | 'rejected' | 'cancelled';
@@ -134,6 +171,7 @@ export interface CrewContext {
   active: boolean; membership_id?: string | null; member_number?: string | null;
   plan_id?: string | null; plan_name?: string | null; started_at?: string | null;
   expires_at?: string | null; benefits: CrewBenefitDefinition[];
+  loyalty_enabled?: boolean; points_balance?: number;
 }
 
 export interface CrewSaleQuote {
