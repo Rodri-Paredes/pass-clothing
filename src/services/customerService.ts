@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import type { Customer, LoyaltySettings, LoyaltySummary } from '../lib/types';
+import type { Customer, LoyaltyPointCampaign, LoyaltySettings, LoyaltySummary } from '../lib/types';
 
 type CustomerRow = Customer & { total_count?: number };
 
@@ -77,19 +77,36 @@ export const customerService = {
   },
 
   async updateLoyaltySettings(settings: LoyaltySettings): Promise<LoyaltySettings> {
-    const { data, error } = await supabase.rpc('update_loyalty_settings', {
+    const { data, error } = await supabase.rpc('update_loyalty_settings_v2', {
       p_enabled: settings.enabled,
       p_points_per_currency_unit: settings.points_per_currency_unit,
       p_currency_unit_amount: settings.currency_unit_amount,
       p_minimum_purchase_amount: settings.minimum_purchase_amount,
       p_max_points_per_sale: settings.max_points_per_sale,
-      p_expiration_enabled: settings.expiration_enabled,
-      p_expiration_days: settings.expiration_days,
+      p_rounding_strategy: settings.rounding_strategy || 'floor',
       p_redemption_enabled: settings.redemption_enabled,
       p_redemption_value: settings.redemption_value,
       p_min_points_to_redeem: settings.min_points_to_redeem,
     });
     if (error) throw error;
     return data as LoyaltySettings;
+  },
+
+  async loyaltyCampaigns(): Promise<LoyaltyPointCampaign[]> {
+    const { data, error } = await supabase.from('loyalty_point_campaigns').select('*').order('priority', { ascending: false }).order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data || []) as LoyaltyPointCampaign[];
+  },
+
+  async createLoyaltyCampaign(input: Partial<LoyaltyPointCampaign>): Promise<LoyaltyPointCampaign> {
+    const { data, error } = await supabase.from('loyalty_point_campaigns').insert(input).select().single();
+    if (error) throw error;
+    return data as LoyaltyPointCampaign;
+  },
+
+  async updateLoyaltyCampaign(id: string, input: Partial<LoyaltyPointCampaign>): Promise<LoyaltyPointCampaign> {
+    const { data, error } = await supabase.from('loyalty_point_campaigns').update({ ...input, updated_at: new Date().toISOString() }).eq('id', id).select().single();
+    if (error) throw error;
+    return data as LoyaltyPointCampaign;
   },
 };

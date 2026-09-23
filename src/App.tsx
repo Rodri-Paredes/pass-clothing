@@ -17,6 +17,7 @@ import CustomersPage from './pages/CustomersPage';
 import SalesStatisticsPage from './pages/SalesStatisticsPage';
 import PassCrewPage from './pages/PassCrewPage';
 import ToastContainer from './components/ui/Toast';
+import LoyaltyCampaignsPage from './pages/LoyaltyCampaignsPage';
 
 function App() {
   const { user, activeBranch, isLoading, isAuthenticated, loadUser } = useAuthStore();
@@ -62,7 +63,8 @@ function App() {
           {user?.role === 'admin' && (
             <>
               <Route path="/users" element={<UsersPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/loyalty-campaigns" element={<LoyaltyCampaignsPage />} />
               <Route path="/health" element={<HealthDashboardPage />} />
             </>
           )}

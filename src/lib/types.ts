@@ -130,6 +130,16 @@ export interface LoyaltySettings {
   redemption_enabled: boolean;
   redemption_value: number;
   min_points_to_redeem: number;
+  rounding_strategy?: 'floor' | 'round' | 'ceil';
+}
+
+export interface LoyaltyPointCampaign {
+  id: string; name: string; description?: string | null; multiplier: number;
+  audience: 'all_customers' | 'crew_only'; crew_plan_id?: string | null;
+  starts_at?: string | null; ends_at?: string | null; days_of_week?: number[] | null;
+  branch_id?: string | null; sale_channel?: 'TIENDA' | 'WEB' | null;
+  category?: string | null; product_id?: string | null; drop_id?: string | null;
+  is_active: boolean; priority: number; created_at: string; updated_at: string;
 }
 
 export type CrewRequestStatus = 'draft' | 'pending' | 'approved' | 'rejected' | 'cancelled';

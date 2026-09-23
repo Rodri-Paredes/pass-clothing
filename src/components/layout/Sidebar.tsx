@@ -12,6 +12,7 @@ import {
   Percent,
   Activity,
   Crown,
+  Sparkles,
   MapPin,
   ChevronRight,
 } from 'lucide-react';
@@ -34,6 +35,7 @@ const NAV_MAIN = [
 ];
 
 const NAV_ADMIN = [
+  { name: 'Campañas de puntos', href: '/loyalty-campaigns', icon: Sparkles },
   { name: 'Usuarios',       href: '/users',    icon: Users },
   { name: 'Configuración',  href: '/settings', icon: Settings },
   { name: 'Diagnóstico',    href: '/health',   icon: Activity },
