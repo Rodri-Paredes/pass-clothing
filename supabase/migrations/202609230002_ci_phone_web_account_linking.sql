@@ -8,7 +8,18 @@ ALTER TABLE public.customer_profiles
 CREATE OR REPLACE FUNCTION public.normalize_customer_ci(p_ci text)
 RETURNS text
 LANGUAGE sql IMMUTABLE SET search_path = public AS $$
-  SELECT NULLIF(regexp_replace(coalesce(p_ci, ''), '[^0-9]', '', 'g'), '')
+  SELECT NULLIF(upper(regexp_replace(trim(coalesce(p_ci, '')), '\s+', '', 'g')), '')
+$$;
+
+CREATE OR REPLACE FUNCTION public.normalize_customer_phone(p_phone text)
+RETURNS text
+LANGUAGE sql IMMUTABLE SET search_path = public AS $$
+  SELECT CASE
+    WHEN length(regexp_replace(coalesce(p_phone, ''), '[^0-9]', '', 'g')) = 11
+      AND left(regexp_replace(coalesce(p_phone, ''), '[^0-9]', '', 'g'), 3) = '591'
+      THEN right(regexp_replace(coalesce(p_phone, ''), '[^0-9]', '', 'g'), 8)
+    ELSE NULLIF(regexp_replace(coalesce(p_phone, ''), '[^0-9]', '', 'g'), '')
+  END
 $$;
 
 CREATE OR REPLACE FUNCTION public.prepare_customer_profile()
@@ -146,8 +157,11 @@ BEGIN
   IF NULLIF(trim(p_first_name), '') IS NULL OR v_ci IS NULL OR public.normalize_customer_phone(p_phone) IS NULL THEN
     RAISE EXCEPTION 'Nombre, CI y teléfono son obligatorios';
   END IF;
-  IF EXISTS (SELECT 1 FROM public.customer_profiles WHERE ci_normalized = v_ci AND deactivated_at IS NULL) THEN
+  IF EXISTS (SELECT 1 FROM public.customer_profiles WHERE ci_normalized = v_ci) THEN
     RAISE EXCEPTION 'Ya existe un cliente con este CI';
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.customer_profiles WHERE phone_normalized = public.normalize_customer_phone(p_phone)) THEN
+    RAISE EXCEPTION 'Ya existe un cliente con este teléfono';
   END IF;
   INSERT INTO public.customer_profiles(first_name, last_name, ci, phone, email, instagram)
   VALUES (NULLIF(trim(p_first_name), ''), NULLIF(trim(p_last_name), ''), NULLIF(trim(p_ci), ''),
