@@ -83,6 +83,8 @@ export interface Customer {
   id: string;
   auth_user_id?: string | null;
   customer_code: string;
+  ci?: string | null;
+  ci_normalized?: string | null;
   first_name?: string | null;
   last_name?: string | null;
   full_name?: string | null;

@@ -10,10 +10,11 @@ export const customerService = {
     return (data || []) as Customer[];
   },
 
-  async create(input: Pick<Customer, 'first_name' | 'last_name' | 'phone' | 'email' | 'instagram'>): Promise<Customer> {
+  async create(input: Pick<Customer, 'first_name' | 'last_name' | 'ci' | 'phone' | 'email' | 'instagram'>): Promise<Customer> {
     const { data, error } = await supabase.rpc('create_customer', {
       p_first_name: input.first_name || null,
       p_last_name: input.last_name || null,
+      p_ci: input.ci || null,
       p_phone: input.phone || null,
       p_email: input.email || null,
       p_instagram: input.instagram || null,
