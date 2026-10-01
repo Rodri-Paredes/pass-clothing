@@ -32,6 +32,29 @@ const ProductsPage: React.FC = () => {
   const [showVisibilityModal, setShowVisibilityModal] = useState(false);
   const [productToToggle, setProductToToggle] = useState<any>(null);
   const [drops, setDrops] = useState<Drop[]>([]);
+  const [selectedDrafts, setSelectedDrafts] = useState<string[]>([]);
+  const [publishing, setPublishing] = useState(false);
+
+  React.useEffect(() => {
+    setSelectedDrafts([]);
+  }, [searchTerm, selectedCategory, showHiddenProducts]);
+
+  const publishSelected = async () => {
+    if (publishing || !selectedDrafts.length || user?.role !== 'admin') return;
+    if (!window.confirm(`¿Publicar ${selectedDrafts.length} productos en la web y habilitarlos para ventas físicas?`)) return;
+
+    setPublishing(true);
+    try {
+      const count = await productService.publishProducts(selectedDrafts);
+      addToast(`${count} productos publicados`, 'success');
+      setSelectedDrafts([]);
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : 'No se pudo publicar la selección', 'error');
+    } finally {
+      reload();
+      setPublishing(false);
+    }
+  };
 
   const {
     items,
@@ -108,6 +131,7 @@ const ProductsPage: React.FC = () => {
   const handleCloseForm = () => {
     setShowProductForm(false);
     setEditingProduct(null);
+    setShowHiddenProducts(true);
     // Recargar inmediatamente para reflejar los cambios
     reload();
   };
@@ -185,7 +209,7 @@ const ProductsPage: React.FC = () => {
                   onChange={(e) => setShowHiddenProducts(e.target.checked)}
                   className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                 />
-                <span className="text-sm text-gray-700">Mostrar productos ocultos</span>
+                <span className="text-sm text-gray-700">Incluir borradores / ocultos</span>
               </label>
             </div>
           )}
@@ -193,6 +217,26 @@ const ProductsPage: React.FC = () => {
       </Card>
 
       {/* Products Grid */}
+      {user?.role === 'admin' && showHiddenProducts && (
+        <Card className="flex flex-wrap items-center gap-3 p-4">
+          <Button
+            disabled={publishing}
+            onClick={() => setSelectedDrafts(items.filter(product => !product.is_visible).map(product => product.id))}
+          >
+            Seleccionar borradores cargados
+          </Button>
+          <span className="text-sm">{selectedDrafts.length} seleccionados</span>
+          <Button disabled={publishing || !selectedDrafts.length} onClick={publishSelected}>
+            {publishing ? 'Publicando…' : 'Publicar seleccionados'}
+          </Button>
+          <Button disabled={publishing || !selectedDrafts.length} onClick={() => setSelectedDrafts([])}>
+            Limpiar selección
+          </Button>
+          <p className="w-full text-xs text-gray-500">
+            La selección incluye solo los productos cargados. Baja para cargar más y agregarlos a la selección.
+          </p>
+        </Card>
+      )}
       {error && (
         <Card className="p-4 bg-red-50 border border-red-200">
           <div className="flex items-center justify-between">
@@ -206,6 +250,19 @@ const ProductsPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredProducts.map((product) => (
             <Card key={product.id} className="overflow-hidden">
+              {user?.role === 'admin' && !product.is_visible && (
+                <label className="mb-3 flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    disabled={publishing}
+                    checked={selectedDrafts.includes(product.id)}
+                    onChange={(event) => setSelectedDrafts(ids => event.target.checked
+                      ? [...ids, product.id]
+                      : ids.filter(id => id !== product.id))}
+                  />
+                  Seleccionar borrador
+                </label>
+              )}
               <div className="aspect-w-1 aspect-h-1 mb-4 relative">
                 {/* Badge de descuento sobre la imagen */}
                 {getProductDiscount(product.id) && (
@@ -231,7 +288,7 @@ const ProductsPage: React.FC = () => {
                   <h3 className="font-semibold text-gray-900 truncate">{product.name}</h3>
                   {!product.is_visible && (
                     <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
-                      Oculto
+                      Borrador / oculto
                     </span>
                   )}
                 </div>

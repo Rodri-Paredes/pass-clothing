@@ -62,7 +62,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
       })) || []
     } : { 
       price: 0,
-      is_visible: true,
+      is_visible: false,
       drop_id: '',
       variants: [{ size: '', stock: branches.reduce((acc, branch) => { acc[branch.id] = 0; return acc; }, {} as { [branchId: string]: number }) }] 
     }
@@ -194,7 +194,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
         product_style: data.product_style || undefined,
         image_url: imageUrl,
         price: data.price,
-        is_visible: data.is_visible,
+        is_visible: product ? data.is_visible : false,
         drop_id: data.drop_id || undefined
       };
       
@@ -263,6 +263,10 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
       }
       
       // Reload products to reflect changes
+      // Publish only after variants and stock have been saved successfully.
+      if (!product && data.is_visible) {
+        await updateProduct(savedProduct.id, { is_visible: true });
+      }
       await loadProducts();
       console.log('Product saved successfully, variants:', variants);
       onClose();
@@ -445,11 +449,11 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
               className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
             />
             <span className="text-sm font-medium text-gray-700">
-              Producto visible en la tienda
+              Publicar en la web y habilitar ventas
             </span>
           </label>
           <p className="text-xs text-gray-500 mt-1">
-            Si está desmarcado, el producto no aparecerá en las ventas ni en la lista principal
+            Desmarcado: guardar como borrador, oculto en la web y bloqueado para ventas. Puedes publicar varios juntos desde Productos.
           </p>
         </div>
 

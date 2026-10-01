@@ -18,6 +18,18 @@ export class SalesService {
     customerId?: string | null,
     clientRequestId?: string
   ): Promise<Sale> {
+    const variantIds = [...new Set(items.map(item => item.variantId))];
+    const { data: available, error: visibilityError } = await supabase
+      .from('product_variants')
+      .select('id, product:products!inner(is_visible)')
+      .in('id', variantIds)
+      .eq('product.is_visible', true);
+
+    if (visibilityError) throw visibilityError;
+    if (!variantIds.length || available?.length !== variantIds.length) {
+      throw new Error('Hay productos en borrador u ocultos. Publica los productos antes de venderlos.');
+    }
+
     // v2 calcula subtotal y total en PostgreSQL, valida sesión, sucursal,
     // cliente, stock y pago mixto. El frontend nunca actualiza stock.
     const { data: rpcResult, error: rpcErr } = await supabase.rpc('create_sale_atomic_v2', {

@@ -3,6 +3,23 @@ import { supabase } from '../lib/supabase';
 import type { Product, Stock } from '../lib/types';
 
 export class ProductService {
+  async publishProducts(ids: string[]): Promise<number> {
+    const selected = [...new Set(ids)];
+    if (!selected.length) return 0;
+
+    const { data, error } = await supabase
+      .from('products')
+      .update({ is_visible: true })
+      .in('id', selected)
+      .select('id');
+
+    if (error) throw error;
+    if (data.length !== selected.length) {
+      throw new Error(`Se publicaron ${data.length} de ${selected.length}. Revisa los permisos y vuelve a seleccionar los pendientes.`);
+    }
+    return data.length;
+  }
+
   async createProductVariant(variant: { product_id: string; size: string }): Promise<any> {
     const normalizedVariant = {
       ...variant,
