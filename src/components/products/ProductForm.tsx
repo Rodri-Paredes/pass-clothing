@@ -1,20 +1,20 @@
 
 import React, { useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, type UseFormRegister, type UseFormSetValue } from 'react-hook-form';
 import { X, Upload } from 'lucide-react';
 import Button from '../ui/Button';
 import { useProductStore } from '../../store/productStore';
 import { useAuthStore } from '../../store/authStore';
 import { dropsService } from '../../services/dropsService';
-import type { Drop, ProductFit, ProductStyle } from '../../lib/types';
+import type { Drop } from '../../lib/types';
 
 interface ProductFormData {
   name: string;
   description: string;
   category: string;
   color?: string;
-  fit?: ProductFit;
-  product_style?: ProductStyle;
+  fit?: string;
+  product_style?: string;
   price: number;
   is_visible: boolean;
   drop_id?: string;
@@ -42,14 +42,14 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
     { size: '', stock: branches.reduce((acc, branch) => { acc[branch.id] = 0; return acc; }, {} as { [branchId: string]: number }) }
   ]);
 
-  const { register, handleSubmit, formState: { errors }, setValue } = useForm<ProductFormData>({
+  const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm<ProductFormData>({
     defaultValues: product ? {
       name: product.name,
       description: product.description,
       category: product.category,
       color: product.color || '',
-      fit: product.fit || undefined,
-      product_style: product.product_style || undefined,
+      fit: product.fit || '',
+      product_style: product.product_style || '',
       price: product.price ?? 0,
       is_visible: product.is_visible ?? true,
       drop_id: product.drop_id || '',
@@ -189,9 +189,9 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
         name: data.name,
         description: data.description,
         category: data.category,
-        color: data.color || undefined,
-        fit: data.fit || undefined,
-        product_style: data.product_style || undefined,
+        color: data.color?.trim() || undefined,
+        fit: data.fit?.trim() || undefined,
+        product_style: data.product_style?.trim() || undefined,
         image_url: imageUrl,
         price: data.price,
         is_visible: product ? data.is_visible : false,
@@ -279,14 +279,14 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
   };
 
   return (
-    <div className="p-6">
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+    <div className="p-4 sm:p-6">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-5 sm:space-y-6">
         {/* Image Upload */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Imagen del Producto
           </label>
-          <div className="flex items-center space-x-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
             {imagePreview ? (
               <div className="relative">
                 <img 
@@ -329,7 +329,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
         </div>
 
         {/* Product Details */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Nombre del Producto
@@ -369,31 +369,15 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Color</label>
-            <select {...register('color')} className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
-              <option value="">Sin especificar</option>
-              <option value="Negro">Negro</option><option value="Blanco">Blanco</option><option value="Gris">Gris</option><option value="Beige">Beige</option>
-              <option value="Azul">Azul</option><option value="Rojo">Rojo</option><option value="Verde">Verde</option><option value="Rosa">Rosa</option>
-              <option value="Marrón">Marrón</option><option value="Amarillo">Amarillo</option><option value="Morado">Morado</option><option value="Multicolor">Multicolor</option><option value="Otro">Otro</option>
-            </select>
+        <fieldset className="rounded-xl border border-gray-200 bg-gray-50/70 p-4 sm:p-5">
+          <legend className="px-1 text-sm font-semibold text-gray-900">Detalles para la tienda</legend>
+          <p className="mb-4 text-xs leading-5 text-gray-500">Elige una opción. Si no aparece, selecciona “Otro” y escribe el valor, por ejemplo, “Guindo”.</p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <SelectOrCustomField label="Color" placeholder="Ej. Guindo" name="color" value={watch('color') || ''} register={register} setValue={setValue} options={['Negro', 'Blanco', 'Gris', 'Beige', 'Azul', 'Rojo', 'Verde', 'Rosa', 'Marrón', 'Amarillo', 'Morado', 'Multicolor']} />
+            <SelectOrCustomField label="Fit" placeholder="Ej. Relaxed" name="fit" value={watch('fit') || ''} register={register} setValue={setValue} options={['Oversize', 'Regular', 'Boxy', 'Slim']} />
+            <SelectOrCustomField label="Tipo / estilo" placeholder="Ej. Vintage" name="product_style" value={watch('product_style') || ''} register={register} setValue={setValue} options={['Básico', 'Estampado', 'Bordado', 'Serigrafía']} />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Fit</label>
-            <select {...register('fit')} className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
-              <option value="">Sin especificar</option>
-              <option value="Oversize">Oversize</option><option value="Regular">Regular</option><option value="Boxy">Boxy</option><option value="Slim">Slim</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Tipo / estilo</label>
-            <select {...register('product_style')} className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
-              <option value="">Sin especificar</option>
-              <option value="Básico">Básico</option><option value="Estampado">Estampado</option><option value="Bordado">Bordado</option><option value="Serigrafía">Serigrafía</option><option value="Otro">Otro</option>
-            </select>
-          </div>
-        </div>
+        </fieldset>
 
         {/* Drop Selection */}
         <div>
@@ -463,8 +447,8 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
             Tallas y Stock
           </label>
           {variants.map((variant, idx) => (
-            <div key={idx} className="border border-gray-200 rounded-lg p-4 mb-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div key={idx} className="mb-4 rounded-xl border border-gray-200 p-3 sm:p-4">
+              <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Talla
@@ -477,7 +461,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
                     placeholder="Ej: S, M, L, XL"
                   />
                 </div>
-                <div className="flex items-end">
+                <div className="flex items-end sm:justify-end">
                   <button
                     type="button"
                     onClick={() => removeVariant(idx)}
@@ -488,10 +472,10 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {branches.map(branch => (
-                  <div key={branch.id} className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-gray-700">{branch.name}</span>
+                  <div key={branch.id} className="flex items-center justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2">
+                    <span className="min-w-0 text-xs font-medium text-gray-700">{branch.name}</span>
                     <input
                       type="text"
                       inputMode="numeric"
@@ -515,7 +499,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
                           handleStockChange(idx, branch.id, 0);
                         }
                       }}
-                      className="w-20 px-2 py-1 border border-gray-300 rounded text-center focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="w-20 shrink-0 rounded border border-gray-300 px-2 py-1 text-center focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                       placeholder="0"
                     />
                     <span className="text-xs text-gray-600">unidades</span>
@@ -544,7 +528,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
         </div>
 
         {/* Form Actions */}
-        <div className="flex justify-end space-x-3">
+        <div className="flex flex-col-reverse gap-3 border-t border-gray-100 pt-5 sm:flex-row sm:justify-end">
           <Button
             type="button"
             variant="ghost"
@@ -556,6 +540,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
           <Button
             type="submit"
             disabled={isLoading}
+            className="w-full sm:w-auto"
           >
             {isLoading ? 'Guardando...' : product ? 'Actualizar Producto' : 'Crear Producto'}
           </Button>
@@ -563,6 +548,46 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
       </form>
     </div>
   );
+};
+
+interface SelectOrCustomFieldProps {
+  label: string;
+  placeholder: string;
+  name: 'color' | 'fit' | 'product_style';
+  value: string;
+  register: UseFormRegister<ProductFormData>;
+  setValue: UseFormSetValue<ProductFormData>;
+  options: string[];
+}
+
+const SelectOrCustomField: React.FC<SelectOrCustomFieldProps> = ({ label, placeholder, name, value, register, setValue, options }) => {
+  const [customSelected, setCustomSelected] = useState(() => Boolean(value) && !options.includes(value));
+  const selectValue = customSelected ? '__custom__' : value;
+
+  return <div>
+    <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor={`${name}-select`}>{label}</label>
+    <select
+      id={`${name}-select`}
+      value={selectValue}
+      onChange={(event) => {
+        const nextValue = event.target.value;
+        const isCustom = nextValue === '__custom__';
+        setCustomSelected(isCustom);
+        setValue(name, isCustom ? '' : nextValue, { shouldDirty: true });
+      }}
+      className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+    >
+      <option value="">Sin especificar</option>
+      {options.map((option) => <option key={option} value={option}>{option}</option>)}
+      <option value="__custom__">Otro (escribir manualmente)</option>
+    </select>
+    {customSelected && <input
+      autoFocus
+      placeholder={placeholder}
+      {...register(name)}
+      className="mt-2 block w-full rounded-lg border border-blue-300 bg-white px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+    />}
+  </div>;
 };
 
 export default ProductForm;
