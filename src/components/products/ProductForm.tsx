@@ -367,9 +367,9 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
 
         <fieldset className="rounded-xl border border-gray-200 bg-gray-50/70 p-4 sm:p-5">
           <legend className="px-1 text-sm font-semibold text-gray-900">Detalles para la tienda</legend>
-          <p className="mb-4 text-xs leading-5 text-gray-500">Elige una opción. Si no aparece, selecciona “Otro” y escribe el valor, por ejemplo, “Guindo”.</p>
+          <p className="mb-4 text-xs leading-5 text-gray-500">Escribe el color libremente. Para fit y estilo, elige una opción o usa “Otro” para escribir un valor nuevo.</p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <SelectOrCustomField label="Color" placeholder="Ej. Guindo" name="color" value={watch('color') || ''} register={register} setValue={setValue} options={['Negro', 'Blanco', 'Gris', 'Beige', 'Azul', 'Rojo', 'Verde', 'Rosa', 'Marrón', 'Amarillo', 'Morado', 'Multicolor']} />
+            <ManualTextField label="Color" placeholder="Ej. Guindo" name="color" register={register} />
             <SelectOrCustomField label="Fit" placeholder="Ej. Relaxed" name="fit" value={watch('fit') || ''} register={register} setValue={setValue} options={['Oversize', 'Regular', 'Boxy', 'Slim']} />
             <SelectOrCustomField label="Tipo / estilo" placeholder="Ej. Vintage" name="product_style" value={watch('product_style') || ''} register={register} setValue={setValue} options={['Básico', 'Estampado', 'Bordado', 'Serigrafía']} />
           </div>
@@ -555,6 +555,18 @@ interface SelectOrCustomFieldProps {
   setValue: UseFormSetValue<ProductFormData>;
   options: string[];
 }
+
+interface ManualTextFieldProps {
+  label: string;
+  placeholder: string;
+  name: 'color';
+  register: UseFormRegister<ProductFormData>;
+}
+
+const ManualTextField: React.FC<ManualTextFieldProps> = ({ label, placeholder, name, register }) => <div>
+  <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor={name}>{label}</label>
+  <input id={name} placeholder={placeholder} {...register(name)} className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+</div>;
 
 const SelectOrCustomField: React.FC<SelectOrCustomFieldProps> = ({ label, placeholder, name, value, register, setValue, options }) => {
   const [customSelected, setCustomSelected] = useState(() => Boolean(value) && !options.includes(value));
