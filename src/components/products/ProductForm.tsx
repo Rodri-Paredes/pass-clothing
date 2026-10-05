@@ -7,6 +7,7 @@ import { useProductStore } from '../../store/productStore';
 import { useAuthStore } from '../../store/authStore';
 import { dropsService } from '../../services/dropsService';
 import type { Drop } from '../../lib/types';
+import { productSaveError } from '../../lib/productSaveError';
 
 interface ProductFormData {
   name: string;
@@ -34,6 +35,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
   const { createProduct, updateProduct, uploadImage, updateStock, createProductVariant, getStockByProduct, loadProducts } = useProductStore();
   const { branches } = useAuthStore();
   const [isLoading, setIsLoading] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>('');
   const [drops, setDrops] = useState<Drop[]>([]);
@@ -153,8 +155,14 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
   };
 
   const onSubmit = async (data: ProductFormData) => {
+    if (isLoading) return;
+    setSaveError('');
     setIsLoading(true);
+    let stage = 'Validación';
     try {
+      if (!Number.isFinite(Number(data.price)) || Number(data.price) <= 0) {
+        throw new Error('El precio debe ser mayor a cero.');
+      }
       const normalizedVariants = variants.map((variant) => ({
         ...variant,
         size: variant.size.trim()
@@ -181,6 +189,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
       
       let imageUrl = product?.image_url || '';
       if (imageFile) {
+        stage = 'Carga de imagen';
         imageUrl = await uploadImage(imageFile);
       }
       
@@ -199,6 +208,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
       };
       
       let savedProduct;
+      stage = 'Guardado de los datos del producto';
       if (product) {
         await updateProduct(product.id, productData);
         savedProduct = { ...product, ...productData };
@@ -209,6 +219,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
       // Create/update variants and stock
       console.log('Creating/updating variants:', normalizedVariants);
       for (const variant of normalizedVariants) {
+        stage = `Guardado de talla ${variant.size}`;
         let variantObj;
         const size = variant.size;
         
@@ -255,7 +266,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
             console.log(`✅ [ProductForm] Stock actualizado exitosamente - Sucursal: ${branchId}, Cantidad: ${quantity}`);
           } catch (error) {
             console.error(`❌ [ProductForm] Error actualizando stock - Sucursal: ${branchId}, Cantidad: ${quantity}:`, error);
-            const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+            const errorMessage = productSaveError(error);
             throw new Error(`Error actualizando stock para sucursal ${branchId}: ${errorMessage}`);
           }
         }
@@ -265,14 +276,16 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
       // Reload products to reflect changes
       // Publish only after variants and stock have been saved successfully.
       if (!product && data.is_visible) {
+        stage = 'Publicación del producto';
         await updateProduct(savedProduct.id, { is_visible: true });
       }
+      stage = 'Actualización de la lista de productos';
       await loadProducts();
       console.log('Product saved successfully, variants:', variants);
       onClose();
     } catch (error) {
       console.error('Error saving product:', error);
-      alert(`Error al guardar el producto: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+      setSaveError(`${stage}: ${productSaveError(error)}`);
     } finally {
       setIsLoading(false);
     }
@@ -415,7 +428,8 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
             min="0"
             {...register('price', { 
               required: 'El precio es requerido',
-              min: { value: 0, message: 'El precio debe ser mayor a 0' }
+              valueAsNumber: true,
+              min: { value: 0.01, message: 'El precio debe ser mayor a 0' }
             })}
             className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
@@ -528,6 +542,11 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose }) => {
         </div>
 
         {/* Form Actions */}
+        {saveError && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          <p className="font-semibold">No se pudo completar el guardado</p>
+          <p className="mt-1 break-words">{saveError}</p>
+          <p className="mt-2">Tus datos siguen en este formulario. Si se guardó parcialmente, revisa los borradores antes de crear otro producto.</p>
+        </div>}
         <div className="flex flex-col-reverse gap-3 border-t border-gray-100 pt-5 sm:flex-row sm:justify-end">
           <Button
             type="button"
