@@ -1,6 +1,5 @@
--- Permite corregir el método de pago sin abrir UPDATE directo sobre sales.
--- La función conserva las políticas RLS estrictas y autoriza únicamente al
--- personal de la misma sucursal (o a un administrador).
+-- Producción no tiene una columna sales.updated_at. Reemplaza la RPC creada
+-- anteriormente para actualizar únicamente las columnas existentes.
 
 CREATE OR REPLACE FUNCTION public.update_sale_payment_method(
   p_sale_id uuid,
