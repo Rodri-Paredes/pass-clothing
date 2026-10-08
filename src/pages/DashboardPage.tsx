@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   TrendingUp,
   Package,
@@ -10,11 +10,11 @@ import {
   Zap,
 } from 'lucide-react';
 import { toBoliviaStartOfDay, toBoliviaEndOfDay } from '../lib/constants';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts';
+import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
-import { fmtMoney, fmtMoneyRaw, fmtQty } from '../lib/formatters';
+import { fmtMoney, fmtQty } from '../lib/formatters';
 import { SkeletonStatGrid } from '../components/ui/Skeleton';
 import { salesService } from '../services/salesService';
 import { useAuthStore } from '../store/authStore';
@@ -31,6 +31,11 @@ interface StatCardProps {
   gradient: string;
   delay?: string;
 }
+
+const formatDateInput = (date: Date) => {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+};
 
 const StatCard: React.FC<StatCardProps> = ({ label, value, sub, icon: Icon, gradient, delay = '0ms' }) => (
   <div
@@ -50,7 +55,13 @@ const StatCard: React.FC<StatCardProps> = ({ label, value, sub, icon: Icon, grad
 );
 
 /* ─── Custom chart tooltip ───────────────────────────────── */
-const ChartTooltip = ({ active, payload, label }: any) => {
+interface ChartTooltipProps {
+  active?: boolean;
+  payload?: Array<{ value?: number | string | null }>;
+  label?: string | number;
+}
+
+const ChartTooltip = ({ active, payload, label }: ChartTooltipProps) => {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-white border border-surface-200 rounded-xl px-3 py-2 shadow-lg text-sm">
@@ -65,6 +76,7 @@ const DashboardPage: React.FC = () => {
   const { activeBranch } = useAuthStore();
   const { dashboardStats, loadDashboardStats, isLoading, getDateRangeRevenueReport } = useSalesStore();
   const [showAllLowStock, setShowAllLowStock] = useState(false);
+  const [monthRevenueReport, setMonthRevenueReport] = useState<MonthlyRevenueReport | null>(null);
   const [customDateRangeReport, setCustomDateRangeReport] = useState<MonthlyRevenueReport | null>(null);
   const [itemsSoldForRange, setItemsSoldForRange] = useState<number | null>(null);
   const [preset, setPreset] = useState<string>('');
@@ -73,34 +85,31 @@ const DashboardPage: React.FC = () => {
   const [endDate, setEndDate] = useState('');
   const [loadingCustomReport, setLoadingCustomReport] = useState(false);
 
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-
-  const getPresetRange = (key: string) => {
+  const getPresetRange = useCallback((key: string) => {
     const now = new Date();
     switch (key) {
-      case 'today': return { start: fmt(now), end: fmt(now) };
+      case 'today': return { start: formatDateInput(now), end: formatDateInput(now) };
       case 'month': {
         const start = new Date(now.getFullYear(), now.getMonth(), 1);
         const end   = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-        return { start: fmt(start), end: fmt(end) };
+        return { start: formatDateInput(start), end: formatDateInput(end) };
       }
       case 'year': {
-        return { start: fmt(new Date(now.getFullYear(), 0, 1)), end: fmt(new Date(now.getFullYear(), 11, 31)) };
+        return { start: formatDateInput(new Date(now.getFullYear(), 0, 1)), end: formatDateInput(new Date(now.getFullYear(), 11, 31)) };
       }
       case 'pay_current': {
         const end   = new Date(now.getFullYear(), now.getMonth(), 18);
         const start = new Date(now.getFullYear(), now.getMonth() - 1, 19);
-        return { start: fmt(start), end: fmt(end) };
+        return { start: formatDateInput(start), end: formatDateInput(end) };
       }
       case 'pay_previous': {
         const end   = new Date(now.getFullYear(), now.getMonth() - 1, 18);
         const start = new Date(now.getFullYear(), now.getMonth() - 2, 19);
-        return { start: fmt(start), end: fmt(end) };
+        return { start: formatDateInput(start), end: formatDateInput(end) };
       }
       default: return null;
     }
-  };
+  }, []);
 
   const applyPreset = async (key: string) => {
     if (!activeBranch) return;
@@ -117,7 +126,9 @@ const DashboardPage: React.FC = () => {
       setCustomDateRangeReport(report);
       const items = await salesService.getDateRangeItemsSold(activeBranch.id, s, e);
       setItemsSoldForRange(items);
-    } catch {}
+    } catch (error) {
+      console.error('No se pudo cargar el reporte del período.', error);
+    }
     finally { setLoadingCustomReport(false); }
   };
 
@@ -131,16 +142,39 @@ const DashboardPage: React.FC = () => {
       setCustomDateRangeReport(report);
       const items = await salesService.getDateRangeItemsSold(activeBranch.id, s, e);
       setItemsSoldForRange(items);
-    } catch {}
+    } catch (error) {
+      console.error('No se pudo cargar el reporte personalizado.', error);
+    }
     finally { setLoadingCustomReport(false); }
   };
 
   useEffect(() => {
-    if (activeBranch) loadDashboardStats(activeBranch.id);
-  }, [activeBranch, loadDashboardStats]);
+    if (!activeBranch) return;
 
-  const displayRevenue     = customDateRangeReport ? customDateRangeReport.total_revenue    : (dashboardStats?.monthlyTotal       || 0);
-  const displaySalesCount  = customDateRangeReport ? customDateRangeReport.total_sales_count : (dashboardStats?.monthlySalesCount  || 0);
+    let cancelled = false;
+    setMonthRevenueReport(null);
+    setCustomDateRangeReport(null);
+    setItemsSoldForRange(null);
+    setPreset('');
+    void loadDashboardStats(activeBranch.id);
+
+    const month = getPresetRange('month');
+    if (month) {
+      void getDateRangeRevenueReport(activeBranch.id, month.start, month.end)
+        .then(report => {
+          if (!cancelled) setMonthRevenueReport(report);
+        })
+        .catch(() => {
+          if (!cancelled) setMonthRevenueReport(null);
+        });
+    }
+
+    return () => { cancelled = true; };
+  }, [activeBranch, loadDashboardStats, getDateRangeRevenueReport, getPresetRange]);
+
+  const activePeriodReport = customDateRangeReport ?? monthRevenueReport;
+  const displayRevenue     = activePeriodReport ? activePeriodReport.total_revenue : (dashboardStats?.monthlyTotal       || 0);
+  const displaySalesCount  = activePeriodReport ? activePeriodReport.total_sales_count : (dashboardStats?.monthlySalesCount  || 0);
   const displayItemsSold   = customDateRangeReport ? (itemsSoldForRange ?? 0)               : (dashboardStats?.monthlyItemsSold   || 0);
   const displayTotalSales  = dashboardStats?.totalSales || 0;
 
@@ -285,22 +319,22 @@ const DashboardPage: React.FC = () => {
         />
       </div>
 
-      {/* Payment breakdown for custom range */}
-      {customDateRangeReport && (
+      {/* Payment breakdown for the active period */}
+      {activePeriodReport && (
         <Card padding="none" className="animate-in">
           <div className="flex items-center gap-2 px-5 py-4 border-b border-surface-100">
             <CalendarRange className="h-4 w-4 text-brand-600" />
-            <h3 className="font-semibold text-surface-900 text-sm">Desglose del período</h3>
+            <h3 className="font-semibold text-surface-900 text-sm">Total del período por método de pago</h3>
             <Badge variant="primary" size="sm">{rangeLabel}</Badge>
           </div>
           <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2.5">
               <h4 className="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-3">Resumen</h4>
               {[
-                { label: 'Total ingresos',    value: fmtMoney(customDateRangeReport.total_revenue),                       bold: true },
-                { label: 'Ventas',            value: fmtQty(customDateRangeReport.total_sales_count) },
-                { label: 'Prendas vendidas',  value: itemsSoldForRange != null ? fmtQty(itemsSoldForRange) : '—' },
-                { label: 'Promedio/venta',    value: fmtMoney(customDateRangeReport.average_sale_amount) },
+                { label: 'Total ingresos',    value: fmtMoney(activePeriodReport.total_revenue),                       bold: true },
+                { label: 'Ventas',            value: fmtQty(activePeriodReport.total_sales_count) },
+                { label: 'Prendas vendidas',  value: customDateRangeReport ? (itemsSoldForRange != null ? fmtQty(itemsSoldForRange) : '—') : fmtQty(displayItemsSold) },
+                { label: 'Promedio/venta',    value: fmtMoney(activePeriodReport.average_sale_amount) },
               ].map(row => (
                 <div key={row.label} className="flex justify-between items-center py-1.5 border-b border-surface-50">
                   <span className="text-sm text-surface-600">{row.label}</span>
@@ -310,27 +344,32 @@ const DashboardPage: React.FC = () => {
                 </div>
               ))}
             </div>
-            <div className="space-y-2.5">
-              <h4 className="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-3">Por tipo de pago</h4>
+          </div>
+
+          <div className="px-5 pb-5">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-xs font-semibold text-surface-500 uppercase tracking-wider">Total por método de pago</h4>
+              <span className="text-[11px] text-surface-400">Los pagos mixtos se distribuyen en cada método</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {[
-                { label: 'Efectivo', value: fmtMoneyRaw(customDateRangeReport.revenue_by_payment_type.efectivo), color: 'text-emerald-600' },
-                { label: 'QR',       value: fmtMoneyRaw(customDateRangeReport.revenue_by_payment_type.qr),       color: 'text-blue-600'   },
-                { label: 'Tarjeta',  value: fmtMoneyRaw(customDateRangeReport.revenue_by_payment_type.tarjeta),  color: 'text-pink-600'   },
-                { label: 'Mixto',    value: fmtMoneyRaw(customDateRangeReport.revenue_by_payment_type.mixto),    color: 'text-purple-600' },
-              ].map(row => (
-                <div key={row.label} className="flex justify-between items-center py-1.5 border-b border-surface-50">
-                  <span className="text-sm text-surface-600">{row.label}</span>
-                  <span className={`text-sm font-semibold ${row.color}`}>{row.value}</span>
+                { label: 'Efectivo', value: activePeriodReport.revenue_by_payment_type.efectivo, color: 'text-emerald-700', background: 'bg-emerald-50 border-emerald-100' },
+                { label: 'QR',       value: activePeriodReport.revenue_by_payment_type.qr,       color: 'text-blue-700',    background: 'bg-blue-50 border-blue-100' },
+                { label: 'Tarjeta',  value: activePeriodReport.revenue_by_payment_type.tarjeta,  color: 'text-pink-700',   background: 'bg-pink-50 border-pink-100' },
+              ].map(payment => (
+                <div key={payment.label} className={`rounded-xl border px-4 py-3 ${payment.background}`}>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-surface-500">{payment.label}</p>
+                  <p className={`mt-1 text-xl font-bold ${payment.color}`}>{fmtMoney(payment.value)}</p>
                 </div>
               ))}
             </div>
           </div>
 
-          {customDateRangeReport.daily_revenue?.length > 0 && (
+          {activePeriodReport.daily_revenue?.length > 0 && (
             <div className="px-5 pb-5">
               <h4 className="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-3">Ventas diarias</h4>
               <ResponsiveContainer width="100%" height={200}>
-                <AreaChart data={customDateRangeReport.daily_revenue}>
+                <AreaChart data={activePeriodReport.daily_revenue}>
                   <defs>
                     <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#4f46e5" stopOpacity={0.15} />
