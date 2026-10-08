@@ -4,7 +4,7 @@ import Button from '../ui/Button';
 import Input from '../ui/Input';
 import Modal from '../ui/Modal';
 import type { Sale } from '../../lib/types';
-import { fmtMoney, fmtMoneyRaw } from '../../lib/formatters';
+import { fmtMoney } from '../../lib/formatters';
 
 interface EditPaymentMethodModalProps {
   isOpen: boolean;
@@ -55,7 +55,11 @@ const EditPaymentMethodModal: React.FC<EditPaymentMethodModalProps> = ({
       onClose();
     } catch (error) {
       console.error('Error updating payment method:', error);
-      setError('Error al actualizar el método de pago. Intenta nuevamente.');
+      const message = error instanceof Error
+        ? error.message
+        : (error as { message?: string } | null)?.message;
+      setError(message || 'Error al actualizar el método de pago. Intenta nuevamente.');
+    } finally {
       setIsSaving(false);
     }
   };

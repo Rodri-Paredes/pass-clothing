@@ -306,41 +306,18 @@ export class SalesService {
       tarjeta?: number;
     }
   ): Promise<Sale> {
-    // Obtener la venta actual
-    const { data: currentSale, error: getSaleError } = await supabase
-      .from('sales')
-      .select('*')
-      .eq('id', saleId)
-      .single();
+    // La edición pasa por una RPC SECURITY DEFINER con autorización por sucursal.
+    // Un UPDATE directo queda bloqueado por la política RLS de sales para vendedores.
+    const { data, error } = await supabase.rpc('update_sale_payment_method', {
+      p_sale_id: saleId,
+      p_payment_type: newPaymentType,
+      p_payment_details: newPaymentType === 'MIXTO' ? paymentDetails ?? null : null,
+    });
 
-    if (getSaleError) throw getSaleError;
-    if (!currentSale) throw new Error('Venta no encontrada');
+    if (error) throw error;
+    if (!data) throw new Error('La venta no pudo ser actualizada');
 
-    // Preparar los datos de actualización
-    const updateData: any = {
-      payment_type: newPaymentType,
-      updated_at: new Date().toISOString()
-    };
-
-    // Si es pago mixto, agregar los detalles
-    if (newPaymentType === 'MIXTO' && paymentDetails) {
-      updateData.payment_details = paymentDetails;
-    } else {
-      // Si cambia de MIXTO a otro tipo, limpiar payment_details
-      updateData.payment_details = null;
-    }
-
-    // Actualizar la venta
-    const { data: updatedSale, error: updateError } = await supabase
-      .from('sales')
-      .update(updateData)
-      .eq('id', saleId)
-      .select()
-      .single();
-
-    if (updateError) throw updateError;
-
-    return updatedSale;
+    return data as Sale;
   }
 }
 
